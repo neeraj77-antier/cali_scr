@@ -875,9 +875,9 @@ export default function Home() {
 
         {activeTab === "response" && (
           <div className="code-container">
-            <div className="code-header">
-              <div style={{ display: "flex", gap: "0.75rem", alignItems: "center" }}>
-                <span>API Execution Output</span>
+            <div className="code-header" style={{ justifyContent: "space-between", flexWrap: "wrap", gap: "0.5rem" }}>
+              <div style={{ display: "flex", gap: "0.75rem", alignItems: "center", flexWrap: "wrap" }}>
+                <span style={{ fontWeight: 600, fontSize: "0.95rem" }}>⚡ Submission API Response</span>
                 {apiResponse && (
                   <span
                     className="app-badge"
@@ -885,20 +885,86 @@ export default function Home() {
                       background: apiResponse.ok ? "rgba(16,185,129,0.2)" : "rgba(244,63,94,0.2)",
                       color: apiResponse.ok ? "#6ee7b7" : "#fda4af",
                       borderColor: apiResponse.ok ? "rgba(16,185,129,0.4)" : "rgba(244,63,94,0.4)",
+                      fontSize: "0.8rem",
+                      padding: "0.25rem 0.6rem"
                     }}
                   >
-                    STATUS: {apiResponse.status || "ERROR"} ({apiResponse.responseTimeMs || 0}ms)
+                    STATUS: {apiResponse.status || "500"} {apiResponse.statusText || ""} ({apiResponse.responseTimeMs || 0}ms)
                   </span>
                 )}
               </div>
+
+              {apiResponse && apiResponse.data && (
+                <button
+                  className="btn btn-secondary btn-sm"
+                  onClick={() => {
+                    navigator.clipboard.writeText(
+                      typeof apiResponse.data === "object"
+                        ? JSON.stringify(apiResponse.data, null, 2)
+                        : String(apiResponse.data)
+                    );
+                    setCopied(true);
+                    setTimeout(() => setCopied(false), 2000);
+                  }}
+                >
+                  {copied ? <Check size={14} color="#10b981" /> : <Copy size={14} />}
+                  {copied ? "Copied Response" : "Copy Response Data"}
+                </button>
+              )}
             </div>
-            <pre className="code-body">
-              {loading
-                ? "Sending request to Caliber API server via Next.js proxy route..."
-                : apiResponse
-                ? JSON.stringify(apiResponse, null, 2)
-                : "No response yet. Click 'Execute API Request' above to test the request."}
-            </pre>
+
+            {loading ? (
+              <div style={{ padding: "3rem", textAlign: "center", color: "var(--text-muted)" }}>
+                <RefreshCw size={28} className="spin" style={{ color: "#818cf8", marginBottom: "1rem" }} />
+                <p style={{ fontSize: "0.95rem", color: "var(--text-main)", fontWeight: 500 }}>
+                  Executing request to Caliber API...
+                </p>
+                <p style={{ fontSize: "0.8rem", marginTop: "0.25rem" }}>
+                  Bypassing CORS &amp; forwarding headers...
+                </p>
+              </div>
+            ) : apiResponse ? (
+              <div style={{ display: "flex", flexDirection: "column", gap: "1rem", padding: "1rem" }}>
+                {/* Main Response Data */}
+                <div>
+                  <div style={{ fontSize: "0.8rem", textTransform: "uppercase", letterSpacing: "0.05em", color: "#818cf8", fontWeight: 600, marginBottom: "0.5rem" }}>
+                    Response Data Payload
+                  </div>
+                  <pre className="code-body" style={{ maxHeight: "350px", overflowY: "auto", margin: 0 }}>
+                    {typeof apiResponse.data === "object"
+                      ? JSON.stringify(apiResponse.data, null, 2)
+                      : apiResponse.data || JSON.stringify(apiResponse, null, 2)}
+                  </pre>
+                </div>
+
+                {/* Status or Error Banner if applicable */}
+                {apiResponse.status === 401 && (
+                  <div className="alert-banner alert-error" style={{ margin: 0 }}>
+                    <ShieldAlert size={16} /> <strong>401 Unauthorized:</strong> Your Bearer Authorization token or Cookie may be expired. Extract fresh tokens from a new cURL request.
+                  </div>
+                )}
+
+                {/* Response Metadata & Headers */}
+                {apiResponse.headers && (
+                  <details style={{ marginTop: "0.5rem", background: "rgba(0,0,0,0.2)", padding: "0.75rem", borderRadius: "8px", border: "1px solid rgba(255,255,255,0.05)" }}>
+                    <summary style={{ cursor: "pointer", fontSize: "0.8rem", fontWeight: 600, color: "var(--text-muted)" }}>
+                      View Server Response Headers &amp; Meta ({Object.keys(apiResponse.headers).length} headers)
+                    </summary>
+                    <pre className="code-body" style={{ marginTop: "0.75rem", fontSize: "0.8rem", background: "transparent" }}>
+                      {JSON.stringify(apiResponse.headers, null, 2)}
+                    </pre>
+                  </details>
+                )}
+              </div>
+            ) : (
+              <div style={{ padding: "3rem", textAlign: "center", color: "var(--text-muted)" }}>
+                <Zap size={32} style={{ color: "rgba(255,255,255,0.2)", marginBottom: "0.75rem" }} />
+                <p style={{ fontSize: "0.9rem" }}>No submission response received yet.</p>
+                <p style={{ fontSize: "0.8rem", color: "var(--text-muted)", marginTop: "0.25rem" }}>
+                  Click <strong>&quot;Execute API Request&quot;</strong> or <strong>&quot;Run This cURL&quot;</strong> above to trigger the submission.
+                </p>
+              </div>
+            )}
           </div>
         )}
       </div>
