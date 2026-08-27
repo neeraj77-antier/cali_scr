@@ -78,7 +78,8 @@ export default function Home() {
 
   // Payload Body States
   const [questionId, setQuestionId] = useState("q3");
-  const [answer, setAnswer] = useState(INITIAL_ANSWERS["q3"]);
+  const [answersMap, setAnswersMap] = useState<Record<string, string>>(INITIAL_ANSWERS);
+  const [answer, setAnswer] = useState(INITIAL_ANSWERS["q3"] || "");
 
   // Keystroke Metrics State
   const [keystroke, setKeystroke] = useState({
@@ -111,14 +112,21 @@ export default function Home() {
   // Computed Full URL
   const targetUrl = `${baseUrl.replace(/\/$/, "")}/${submissionId}/probe/answer`;
 
-  // Handle Question ID change & sync initial answer if available
+  // Handle Question ID change & sync saved answer for that question
   const handleQuestionChange = (newQId: string) => {
     setQuestionId(newQId);
-    if (INITIAL_ANSWERS[newQId]) {
-      const newAns = INITIAL_ANSWERS[newQId];
+    if (answersMap[newQId] !== undefined) {
+      const newAns = answersMap[newQId];
       setAnswer(newAns);
       autoCalculateKeystrokes(newAns);
     }
+  };
+
+  // Handle Answer text change
+  const handleAnswerChange = (newAns: string) => {
+    setAnswer(newAns);
+    setAnswersMap((prev) => ({ ...prev, [questionId]: newAns }));
+    autoCalculateKeystrokes(newAns);
   };
 
   // Auto-estimate keystrokes based on answer text
@@ -163,12 +171,15 @@ export default function Home() {
       }
 
       if (parsed.bodyData && typeof parsed.bodyData === "object") {
+        const qId = parsed.bodyData.questionId || questionId;
         if (parsed.bodyData.questionId) {
           setQuestionId(parsed.bodyData.questionId);
           extractedFields.push("Question ID");
         }
         if (typeof parsed.bodyData.answer === "string") {
           setAnswer(parsed.bodyData.answer);
+          setAnswersMap((prev) => ({ ...prev, [qId]: parsed.bodyData.answer }));
+          autoCalculateKeystrokes(parsed.bodyData.answer);
           extractedFields.push("Answer Text");
         }
         if (parsed.bodyData.keystroke && typeof parsed.bodyData.keystroke === "object") {
@@ -624,10 +635,7 @@ export default function Home() {
                 className="input-textarea input-mono"
                 rows={8}
                 value={answer}
-                onChange={(e) => {
-                  setAnswer(e.target.value);
-                  autoCalculateKeystrokes(e.target.value);
-                }}
+                onChange={(e) => handleAnswerChange(e.target.value)}
                 placeholder="Enter probe answer text here..."
               />
             </div>

@@ -19,8 +19,8 @@ export function parseCurlCommand(curlText: string): ParsedCurl {
 
   if (!curlText || typeof curlText !== "string") return result;
 
-  // Normalize bash continuation backslashes at end of lines & bash $'...' strings
-  let normalized = curlText.replace(/\\\s*\r?\n/g, " ");
+  // Normalize bash continuation backslashes at end of lines
+  const normalized = curlText.replace(/\\\s*\r?\n/g, " ");
 
   // Extract URL
   const urlMatch = normalized.match(/curl\s+(?:--location\s+)?['"]?([^'"]\S+)['"]?/i) || 
@@ -56,31 +56,28 @@ export function parseCurlCommand(curlText: string): ParsedCurl {
     }
   }
 
-  // Extract Body Data (--data, --data-raw, --data-binary, -d)
-  const dataRegex = /(?:--data|--data-raw|--data-binary|-d)\s+(\$?['"]([\s\S]*?)['"]|\$?['"]([\s\S]*?)['"])/i;
-  const dataMatch = normalized.match(/(?:--data|--data-raw|--data-binary|-d)\s+\$?['"]([\s\S]*?)['"](?=\s+--|\s*$)/i) ||
-                    normalized.match(/(?:--data|--data-raw|--data-binary|-d)\s+['"]([\s\S]*?)['"]/i);
+  // Robust JSON Body Extraction (--data, --data-raw, --data-binary, -d)
+  const dataPosMatch = normalized.match(/(?:--data|--data-raw|--data-binary|-d)\s+/i);
+  if (dataPosMatch && dataPosMatch.index !== undefined) {
+    const searchStartIndex = dataPosMatch.index + dataPosMatch[0].length;
+    const jsonStart = normalized.indexOf("{", searchStartIndex);
+    const jsonEnd = normalized.lastIndexOf("}");
 
-  if (dataMatch) {
-    let rawBody = dataMatch[1];
-    if (rawBody) {
-      // Unescape bash single quote sequence: '\'' -> '
-      rawBody = rawBody.replace(/'\\''/g, "'");
+    if (jsonStart !== -1 && jsonEnd > jsonStart) {
+      let rawJson = normalized.substring(jsonStart, jsonEnd + 1);
+
+      // Clean bash escape sequences: '\'' -> '
+      rawJson = rawJson.replace(/'\\''/g, "'");
 
       try {
-        result.bodyData = JSON.parse(rawBody);
+        result.bodyData = JSON.parse(rawJson);
       } catch (e) {
-        // Fallback: try finding first '{' to last '}'
-        const firstBrace = rawBody.indexOf("{");
-        const lastBrace = rawBody.lastIndexOf("}");
-        if (firstBrace !== -1 && lastBrace > firstBrace) {
-          try {
-            result.bodyData = JSON.parse(rawBody.substring(firstBrace, lastBrace + 1));
-          } catch {
-            result.bodyData = rawBody;
-          }
-        } else {
-          result.bodyData = rawBody;
+        // Fallback if raw newlines or escaped slashes exist
+        try {
+          const sanitized = rawJson.replace(/\r?\n/g, "\\n");
+          result.bodyData = JSON.parse(sanitized);
+        } catch {
+          result.bodyData = rawJson;
         }
       }
     }
