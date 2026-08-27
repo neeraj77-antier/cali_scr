@@ -32,7 +32,7 @@ export default function Home() {
   const [isMounted, setIsMounted] = useState<boolean>(false);
 
   // Main Config States
-  const [submissionId, setSubmissionId] = useState("568744f7-c0b1-499c-8c91-bc99330f4202");
+  const [submissionId, setSubmissionId] = useState("");
   const [baseUrl, setBaseUrl] = useState("https://caliber.antiers.work/api/v1/submissions");
 
   useEffect(() => {
