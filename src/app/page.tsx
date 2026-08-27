@@ -15,7 +15,10 @@ import {
   ShieldCheck, 
   FileText, 
   ArrowRight,
-  Database
+  Database,
+  Lock,
+  Unlock,
+  ShieldAlert
 } from "lucide-react";
 
 // Default preset answers provided in prompt
@@ -26,9 +29,40 @@ const INITIAL_ANSWERS: Record<string, string> = {
 };
 
 export default function Home() {
+  // Authentication & Security States
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
+  const [passwordInput, setPasswordInput] = useState<string>("");
+  const [authError, setAuthError] = useState<string>("");
+  const [isMounted, setIsMounted] = useState<boolean>(false);
+
   // Main Config States
   const [submissionId, setSubmissionId] = useState("568744f7-c0b1-499c-8c91-bc99330f4202");
   const [baseUrl, setBaseUrl] = useState("https://caliber.antiers.work/api/v1/submissions");
+
+  useEffect(() => {
+    setIsMounted(true);
+    const savedAuth = localStorage.getItem("caliber_studio_auth");
+    if (savedAuth === "LUDHIANA") {
+      setIsAuthenticated(true);
+    }
+  }, []);
+
+  const handleUnlock = (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (passwordInput.trim() === "LUDHIANA") {
+      setIsAuthenticated(true);
+      localStorage.setItem("caliber_studio_auth", "LUDHIANA");
+      setAuthError("");
+      setPasswordInput("");
+    } else {
+      setAuthError("Invalid access password. Access denied.");
+    }
+  };
+
+  const handleLock = () => {
+    setIsAuthenticated(false);
+    localStorage.removeItem("caliber_studio_auth");
+  };
   
   // Headers State
   const [authorization, setAuthorization] = useState(
@@ -297,6 +331,80 @@ export default function Home() {
     }
   };
 
+  if (!isMounted) {
+    return null;
+  }
+
+  if (!isAuthenticated) {
+    return (
+      <div style={{
+        minHeight: "85vh",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        padding: "1.5rem"
+      }}>
+        <div style={{
+          maxWidth: "420px",
+          width: "100%",
+          background: "var(--bg-card)",
+          backdropFilter: "blur(20px)",
+          WebkitBackdropFilter: "blur(20px)",
+          border: "1px solid rgba(255, 255, 255, 0.12)",
+          borderRadius: "20px",
+          padding: "2.5rem 2rem",
+          boxShadow: "0 20px 50px rgba(0, 0, 0, 0.5)",
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          gap: "1.5rem",
+          textAlign: "center"
+        }}>
+          <div style={{
+            background: "linear-gradient(135deg, rgba(99, 102, 241, 0.2), rgba(6, 182, 212, 0.2))",
+            border: "1px solid rgba(99, 102, 241, 0.3)",
+            padding: "1rem",
+            borderRadius: "50%",
+            color: "#a5b4fc"
+          }}>
+            <Lock size={32} />
+          </div>
+
+          <div>
+            <h2 style={{ fontSize: "1.35rem", fontWeight: 700, color: "var(--text-main)" }}>Protected Studio Access</h2>
+            <p style={{ fontSize: "0.825rem", color: "var(--text-muted)", marginTop: "0.35rem" }}>
+              Enter security password to access Caliber Probe Studio.
+            </p>
+          </div>
+
+          <form onSubmit={handleUnlock} style={{ width: "100%", display: "flex", flexDirection: "column", gap: "1rem" }}>
+            <div className="form-group">
+              <input
+                type="password"
+                className="input-text"
+                placeholder="Enter access password..."
+                value={passwordInput}
+                onChange={(e) => setPasswordInput(e.target.value)}
+                autoFocus
+                style={{ textAlign: "center", letterSpacing: "0.2em", fontSize: "1rem" }}
+              />
+            </div>
+
+            {authError && (
+              <div className="alert-banner alert-error" style={{ justifyContent: "center" }}>
+                <ShieldAlert size={16} /> {authError}
+              </div>
+            )}
+
+            <button type="submit" className="btn btn-primary" style={{ width: "100%", padding: "0.75rem" }}>
+              <Unlock size={16} /> Unlock Access
+            </button>
+          </form>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="container">
       {/* App Header */}
@@ -310,11 +418,14 @@ export default function Home() {
               <h1 className="app-title">Caliber Probe API Studio</h1>
               <span className="app-badge">Next.js 15</span>
             </div>
-            <p className="app-subtitle">Extract headers, customize question payload & keystrokes, and trigger submissions.</p>
+            <p className="app-subtitle">Extract headers, customize question payload &amp; keystrokes, and trigger submissions.</p>
           </div>
         </div>
 
         <div style={{ display: "flex", gap: "0.75rem" }}>
+          <button className="btn btn-secondary" onClick={handleLock} title="Lock session">
+            <Lock size={16} /> Lock
+          </button>
           <button className="btn btn-secondary" onClick={handleCopyCurl}>
             {copied ? <Check size={16} color="#10b981" /> : <Copy size={16} />}
             {copied ? "Copied!" : "Copy cURL"}
