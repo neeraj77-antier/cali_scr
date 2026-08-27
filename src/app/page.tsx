@@ -98,7 +98,7 @@ export default function Home() {
     }));
   };
 
-  // Analyze Secondary cURL and extract Authorization & Cookie
+  // Analyze Secondary cURL and extract Authorization, Cookie, Submission ID & Body
   const handleParseSecondaryCurl = () => {
     if (!secondaryCurl.trim()) {
       setSecondaryStatus({ type: "error", msg: "Please paste a secondary cURL request first!" });
@@ -108,31 +108,55 @@ export default function Home() {
     try {
       const parsed: ParsedCurl = parseCurlCommand(secondaryCurl);
       let updatedCount = 0;
+      const extractedFields: string[] = [];
 
       if (parsed.authorization) {
         setAuthorization(parsed.authorization);
         updatedCount++;
+        extractedFields.push("Authorization");
       }
 
       if (parsed.cookie) {
         setCookie(parsed.cookie);
         updatedCount++;
+        extractedFields.push("Cookie");
       }
 
       if (parsed.submissionId) {
         setSubmissionId(parsed.submissionId);
+        updatedCount++;
+        extractedFields.push("Submission ID");
+      }
+
+      if (parsed.bodyData && typeof parsed.bodyData === "object") {
+        if (parsed.bodyData.questionId) {
+          setQuestionId(parsed.bodyData.questionId);
+          extractedFields.push("Question ID");
+        }
+        if (typeof parsed.bodyData.answer === "string") {
+          setAnswer(parsed.bodyData.answer);
+          extractedFields.push("Answer Text");
+        }
+        if (parsed.bodyData.keystroke && typeof parsed.bodyData.keystroke === "object") {
+          setKeystroke((prev) => ({ ...prev, ...parsed.bodyData.keystroke }));
+          extractedFields.push("Keystrokes");
+        }
+        if (parsed.bodyData.automation && typeof parsed.bodyData.automation === "object") {
+          setAutomation((prev) => ({ ...prev, ...parsed.bodyData.automation }));
+          extractedFields.push("Automation Flags");
+        }
         updatedCount++;
       }
 
       if (updatedCount > 0) {
         setSecondaryStatus({
           type: "success",
-          msg: `Successfully extracted and updated ${updatedCount} field(s) (${parsed.authorization ? "Authorization, " : ""}${parsed.cookie ? "Cookie, " : ""}${parsed.submissionId ? "Submission ID" : ""})!`,
+          msg: `Successfully extracted and updated: ${extractedFields.join(", ")}!`,
         });
       } else {
         setSecondaryStatus({
           type: "info",
-          msg: "No Authorization or Cookie header detected in the pasted cURL. Make sure headers are formatted with --header 'authorization: ...' or --header 'Cookie: ...'.",
+          msg: "No Authorization, Cookie, or JSON Body detected in the pasted cURL. Make sure it contains valid headers and body.",
         });
       }
     } catch (err: any) {
@@ -147,6 +171,11 @@ export default function Home() {
     keystroke,
     automation,
   };
+
+  // Formatted JSON string
+  const jsonBodyString = JSON.stringify(payloadObject, null, 2);
+  // Escape single quotes for bash execution: ' -> '\''
+  const bashSafeJson = jsonBodyString.replace(/'/g, "'\\''");
 
   // Generate runnable cURL string
   const generatedCurl = `curl --location '${targetUrl}' \\
@@ -167,7 +196,7 @@ export default function Home() {
 --header 'sec-fetch-site: same-origin' \\
 --header 'user-agent: Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36' \\
 --header 'Cookie: ${cookie}' \\
---data '${JSON.stringify(payloadObject, null, 2)}'`;
+--data '${bashSafeJson}'`;
 
   // Copy cURL to Clipboard
   const handleCopyCurl = () => {

@@ -19,16 +19,16 @@ export function parseCurlCommand(curlText: string): ParsedCurl {
 
   if (!curlText || typeof curlText !== "string") return result;
 
-  // Normalize newlines and continuation backslashes
-  const normalized = curlText.replace(/\\\s*\n/g, " ");
+  // Normalize continuation backslashes at end of lines
+  const normalized = curlText.replace(/\\\s*\r?\n/g, " ");
 
-  // Extract URL (e.g., curl --location 'URL' or curl 'URL')
+  // Extract URL
   const urlMatch = normalized.match(/curl\s+(?:--location\s+)?['"]?([^'"]\S+)['"]?/i) || 
                    normalized.match(/https?:\/\/[^\s'"]+/i);
   if (urlMatch) {
     result.url = urlMatch[1] || urlMatch[0];
     
-    // Try to extract submissionId from URL like /submissions/{id}/probe/answer
+    // Extract submissionId from URL path like /submissions/{id}/probe
     const subMatch = result.url.match(/\/submissions\/([^\/]+)\/probe/i);
     if (subMatch) {
       result.submissionId = subMatch[1];
@@ -36,7 +36,6 @@ export function parseCurlCommand(curlText: string): ParsedCurl {
   }
 
   // Extract Headers
-  // Pattern matches: --header 'key: value' or -H "key: value"
   const headerRegex = /(?:--header|-H)\s+['"]([^'"]+)['"]/gi;
   let match: RegExpExecArray | null;
 
@@ -57,15 +56,32 @@ export function parseCurlCommand(curlText: string): ParsedCurl {
     }
   }
 
-  // Extract Body Data (--data, --data-raw, -d)
-  const dataMatch = normalized.match(/(?:--data|--data-raw|-d)\s+['"]([\s\S]*?)['"](?=\s+--|\s*$)/i) ||
-                    normalized.match(/(?:--data|--data-raw|-d)\s+'([\s\S]*)'/i);
+  // Extract Body Data (--data, --data-raw, --data-binary, -d)
+  const dataRegex = /(?:--data|--data-raw|--data-binary|-d)\s+('([\s\S]*?)'|"([\s\S]*?)")/i;
+  const dataMatch = normalized.match(dataRegex);
+
   if (dataMatch) {
-    const rawBody = dataMatch[1];
-    try {
-      result.bodyData = JSON.parse(rawBody);
-    } catch {
-      result.bodyData = rawBody;
+    let rawBody = dataMatch[2] !== undefined ? dataMatch[2] : dataMatch[3];
+    if (rawBody) {
+      // Unescape bash single quote sequence: '\'' -> '
+      rawBody = rawBody.replace(/'\\''/g, "'");
+
+      try {
+        result.bodyData = JSON.parse(rawBody);
+      } catch (e) {
+        // Fallback: try finding first '{' to last '}' if trailing chars exist
+        const firstBrace = rawBody.indexOf("{");
+        const lastBrace = rawBody.lastIndexOf("}");
+        if (firstBrace !== -1 && lastBrace > firstBrace) {
+          try {
+            result.bodyData = JSON.parse(rawBody.substring(firstBrace, lastBrace + 1));
+          } catch {
+            result.bodyData = rawBody;
+          }
+        } else {
+          result.bodyData = rawBody;
+        }
+      }
     }
   }
 
