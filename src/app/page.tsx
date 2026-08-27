@@ -108,9 +108,18 @@ export default function Home() {
   const [loading, setLoading] = useState(false);
   const [apiResponse, setApiResponse] = useState<any>(null);
   const [activeTab, setActiveTab] = useState<"curl" | "response" | "jsonBody">("curl");
+  const [generateMessage, setGenerateMessage] = useState<string | null>(null);
 
   // Computed Full URL
   const targetUrl = `${baseUrl.replace(/\/$/, "")}/${submissionId}/probe/answer`;
+
+  // Explicitly Trigger Fresh cURL Generation & Focus Tab
+  const handleGenerateNewCurl = () => {
+    setActiveTab("curl");
+    autoCalculateKeystrokes(answer);
+    setGenerateMessage("Fresh cURL command generated with updated payload!");
+    setTimeout(() => setGenerateMessage(null), 3000);
+  };
 
   // Handle Question ID change & sync saved answer for that question
   const handleQuestionChange = (newQId: string) => {
@@ -433,7 +442,10 @@ export default function Home() {
           </div>
         </div>
 
-        <div style={{ display: "flex", gap: "0.75rem" }}>
+        <div style={{ display: "flex", gap: "0.75rem", flexWrap: "wrap" }}>
+          <button className="btn btn-accent" onClick={handleGenerateNewCurl}>
+            <Sparkles size={16} /> Generate New cURL
+          </button>
           <button className="btn btn-secondary" onClick={handleLock} title="Lock session">
             <Lock size={16} /> Lock
           </button>
@@ -447,6 +459,12 @@ export default function Home() {
           </button>
         </div>
       </header>
+
+      {generateMessage && (
+        <div className="alert-banner alert-success" style={{ marginBottom: "1rem" }}>
+          <ShieldCheck size={18} /> {generateMessage}
+        </div>
+      )}
 
       {/* Main Studio Grid */}
       <div className="studio-grid">
@@ -818,7 +836,10 @@ export default function Home() {
           <div className="code-container">
             <div className="code-header">
               <span>Executable bash command with updated submission ID &amp; injected tokens</span>
-              <div style={{ display: "flex", gap: "0.5rem" }}>
+              <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
+                <button className="btn btn-accent btn-sm" onClick={handleGenerateNewCurl}>
+                  <Sparkles size={14} /> Refresh cURL
+                </button>
                 <button className="btn btn-primary btn-sm" onClick={handleExecuteRequest} disabled={loading}>
                   {loading ? <RefreshCw size={14} className="spin" /> : <Play size={14} />}
                   Run This cURL
