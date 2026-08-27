@@ -245,6 +245,58 @@ export default function Home() {
     }
   };
 
+  // Execute Pasted/Secondary cURL directly
+  const handleExecutePastedCurl = async () => {
+    if (!secondaryCurl.trim()) {
+      setSecondaryStatus({ type: "error", msg: "Please paste a cURL request first!" });
+      return;
+    }
+
+    setLoading(true);
+    setApiResponse(null);
+    setActiveTab("response");
+
+    try {
+      const parsed: ParsedCurl = parseCurlCommand(secondaryCurl);
+      
+      const execUrl = parsed.url || targetUrl;
+      const execHeaders: Record<string, string> = { ...parsed.headers };
+
+      if (!execHeaders["authorization"] && parsed.authorization) {
+        execHeaders["authorization"] = parsed.authorization;
+      }
+      if (!execHeaders["Cookie"] && parsed.cookie) {
+        execHeaders["Cookie"] = parsed.cookie;
+      }
+      if (!execHeaders["content-type"]) {
+        execHeaders["content-type"] = "application/json";
+      }
+
+      const res = await fetch("/api/proxy", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          targetUrl: execUrl,
+          headers: execHeaders,
+          method: "POST",
+          body: parsed.bodyData || payloadObject,
+        }),
+      });
+
+      const data = await res.json();
+      setApiResponse(data);
+      setSecondaryStatus({
+        type: "success",
+        msg: `Executed pasted cURL request for URL: ${execUrl}`,
+      });
+    } catch (err: any) {
+      setApiResponse({ error: err.message || "Failed to execute pasted cURL" });
+      setSecondaryStatus({ type: "error", msg: `Execution error: ${err.message}` });
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <div className="container">
       {/* App Header */}
@@ -337,10 +389,23 @@ export default function Home() {
               onChange={(e) => setSecondaryCurl(e.target.value)}
             />
 
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <button className="btn btn-accent btn-sm" onClick={handleParseSecondaryCurl}>
-                <ArrowRight size={14} /> Extract &amp; Inject Tokens
-              </button>
+            <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap", justifyContent: "space-between", alignItems: "center" }}>
+              <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
+                <button className="btn btn-accent btn-sm" onClick={handleParseSecondaryCurl}>
+                  <ArrowRight size={14} /> Extract &amp; Inject Tokens
+                </button>
+
+                <button
+                  className="btn btn-primary btn-sm"
+                  onClick={handleExecutePastedCurl}
+                  disabled={loading}
+                  style={{ background: "linear-gradient(135deg, #10b981, #059669)" }}
+                >
+                  {loading ? <RefreshCw size={14} className="spin" /> : <Play size={14} />}
+                  Execute Pasted cURL Directly
+                </button>
+              </div>
+
               {secondaryCurl && (
                 <button
                   className="btn btn-secondary btn-sm"
@@ -366,6 +431,7 @@ export default function Home() {
                 <Key size={18} color="#f59e0b" /> Active Authentication Headers
               </h2>
             </div>
+            {/* rest remains same */}
 
             <div className="form-group">
               <label className="form-label">
@@ -633,10 +699,16 @@ export default function Home() {
           <div className="code-container">
             <div className="code-header">
               <span>Executable bash command with updated submission ID &amp; injected tokens</span>
-              <button className="btn btn-secondary btn-sm" onClick={handleCopyCurl}>
-                {copied ? <Check size={14} color="#10b981" /> : <Copy size={14} />}
-                {copied ? "Copied" : "Copy"}
-              </button>
+              <div style={{ display: "flex", gap: "0.5rem" }}>
+                <button className="btn btn-primary btn-sm" onClick={handleExecuteRequest} disabled={loading}>
+                  {loading ? <RefreshCw size={14} className="spin" /> : <Play size={14} />}
+                  Run This cURL
+                </button>
+                <button className="btn btn-secondary btn-sm" onClick={handleCopyCurl}>
+                  {copied ? <Check size={14} color="#10b981" /> : <Copy size={14} />}
+                  {copied ? "Copied" : "Copy"}
+                </button>
+              </div>
             </div>
             <pre className="code-body">{generatedCurl}</pre>
           </div>
