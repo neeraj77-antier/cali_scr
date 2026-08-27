@@ -21,12 +21,8 @@ import {
   ShieldAlert
 } from "lucide-react";
 
-// Default preset answers provided in prompt
-const INITIAL_ANSWERS: Record<string, string> = {
-  q1: `Severity/priority trace + escalation scenario\n\nExact wording used to justify High (not Critical): "I'm not calling this Critical only because the notes are explicit that the order was NOT actually placed (the button greyed out afterward) — there's no evidence of an actual bad charge or corrupted order record, only a UI/calculation defect and a crash."\n\nExact evidence cited: the raw notes' own phrase — "order was NOT actually placed (button greyed out after)" — quoted directly, not paraphrased, specifically because it's the one fact in the notes that draws the line between "bad UX" and "bad transaction."\n\nI also pre-committed to the escalation trigger in that same sentence: "If either of those facts changes on investigation (e.g., an order does get created before the crash under some timing), this should be re-rated Critical immediately."\n\nIf investigation confirms server-side double-charging of the discount: that's exactly the trigger condition firing — this stops being a client-side rendering defect and becomes a confirmed financial-integrity bug (real orders processed with the wrong discount amount, not just a bad number shown briefly on screen). Rewritten fields:\n\nSeverity: Critical — investigation confirmed the race condition isn't confined to the client; it intermittently double-applies the discount server-side, meaning real orders can be finalized with an incorrect total. This is confirmed financial impact, not a UI/calculation display defect, which is exactly the condition already flagged as the escalation trigger.\n\nPriority: Critical / immediate hotfix — a confirmed revenue-impacting defect triggered by an ordinary user action (double-click) on the highest-traffic checkout path cannot wait for a normal release cycle; it needs an emergency patch or a temporary mitigation (e.g., rate-limiting the endpoint) before the next scheduled deploy.`,
-
-  q3: `Freeze sources + one concrete fix (Web Worker offload)\n\nSpecific lines that would cause a dropped-frame/freeze on a Chromebook at 20k rows:\nconst filtered = useMemo(() => filterRows(data, columns, debouncedQuery), [data, columns, debouncedQuery]);\nconst sorted = useMemo(() => { ...; return sortRows(filtered, sort.key, sort.direction, col?.sortFn); }, [filtered, sort, columns]);\nBoth recompute a full O(n) filter / O(n log n) sort over the entire data array synchronously on the main thread, and critically — they're gated on data itself, not just the debounced query. If a parent re-fetches or a WebSocket streams row updates, data changes frequently and neither useMemo has any throttling for that path (debounce only applies to query). And separately: {pageRows.map((row, i) => (<tr>...))} renders exactly pageSize DOM rows with no cap — pageSize={5000} renders 5000 <tr> elements in one commit, a classic large-DOM freeze independent of the sort/filter cost.\n\nThe one fix — offload filterRows/sortRows to a Web Worker, keeping DataTableProps<T> unchanged:\n\n// dataTableWorker.ts — runs off the main thread\nimport { filterRows, sortRows } from './dataTableUtils';\n\nself.onmessage = (e) => {\n  const { requestId, data, columnKeys, query, sortKey, sortDirection } = e.data;\n  const pseudoColumns = columnKeys.map((key) => ({ key }));\n  let result = filterRows(data, pseudoColumns, query);\n  if (sortKey) result = sortRows(result, sortKey, sortDirection);\n  (self as any).postMessage({ requestId, rows: result });\n};\n\n// internal hook — replaces the two useMemos, same inputs/outputs, no prop changes\nfunction useOffloadedFilterSort<T extends object>(\n  data: T[],\n  columns: ColumnDef<T>[],\n  debouncedQuery: string,\n  sort: SortState<T>,\n  workerThreshold = 5000\n): T[] {\n  const [result, setResult] = useState<T[]>([]);\n  const workerRef = useRef<Worker | null>(null);\n  const latestRequestId = useRef(0);\n  const hasCustomSortFn = !!(sort.key && columns.find((c) => c.key === sort.key)?.sortFn);\n  const useWorker = data.length >= workerThreshold && !hasCustomSortFn; // functions can't cross postMessage, so a custom sortFn stays synchronous\n\n  useEffect(() => {\n    if (!useWorker) return;\n    workerRef.current = new Worker(new URL('./dataTableWorker.ts', import.meta.url));\n    workerRef.current.onmessage = (e) => {\n      if (e.data.requestId === latestRequestId.current) setResult(e.data.rows);\n    };\n    return () => workerRef.current?.terminate();\n  }, [useWorker]);\n\n  useEffect(() => {\n    if (!useWorker) {\n      let r = filterRows(data, columns, debouncedQuery);\n      if (sort.key) r = sortRows(r, sort.key, sort.direction, columns.find((c) => c.key === sort.key)?.sortFn);\n      setResult(r);\n      return;\n    }\n    const id = ++latestRequestId.current;\n    workerRef.current?.postMessage({\n      requestId: id,\n      data,\n      columnKeys: columns.map((c) => c.key),\n      query: debouncedQuery,\n      sortKey: sort.key,\n      sortDirection: sort.direction,\n    });\n  }, [data, columns, debouncedQuery, sort, useWorker]);\n\n  return result;\n}\n\nPlugged in by replacing the two useMemo blocks in DataTable with one call: const sorted = useOffloadedFilterSort(data, columns, debouncedQuery, sort); — DataTableProps<T> is untouched; this is purely an internal implementation swap, small datasets (< 5000 rows, or any column using a custom sortFn) stay on the original synchronous path since the worker overhead isn't worth it there.\n\nCompanion one-liner for the named pageSize={5000} case, cheap enough to include alongside without it being "a second fix": const effectivePageSize = Math.min(pageSize, 200); used wherever pageSize currently drives pageRows/totalPages — caps rendered <tr> count regardless of what a consumer passes in.`
-};
+// Empty initial answers dictionary by default
+const INITIAL_ANSWERS: Record<string, string> = {};
 
 export default function Home() {
   // Authentication & Security States
@@ -76,16 +72,16 @@ export default function Home() {
   const [secondaryCurl, setSecondaryCurl] = useState("");
   const [secondaryStatus, setSecondaryStatus] = useState<{ type: "success" | "error" | "info"; msg: string } | null>(null);
 
-  // Payload Body States
-  const [questionId, setQuestionId] = useState("q3");
-  const [answersMap, setAnswersMap] = useState<Record<string, string>>(INITIAL_ANSWERS);
-  const [answer, setAnswer] = useState(INITIAL_ANSWERS["q3"] || "");
+  // Payload Body States - Empty by default
+  const [questionId, setQuestionId] = useState("q1");
+  const [answersMap, setAnswersMap] = useState<Record<string, string>>({});
+  const [answer, setAnswer] = useState("");
 
   // Keystroke Metrics State
   const [keystroke, setKeystroke] = useState({
-    keystrokeCount: 2125,
-    backspaceCount: 120,
-    finalLength: 2175,
+    keystrokeCount: 0,
+    backspaceCount: 0,
+    finalLength: 0,
     avgIntervalMs: 147,
     intervalStdDevMs: 515,
     unmatchedInsertionChars: 0,
@@ -658,19 +654,13 @@ export default function Home() {
               />
             </div>
 
-            {/* Quick Answer Loaders */}
+            {/* Quick Answer Actions */}
             <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
               <button
                 className="btn btn-secondary btn-sm"
-                onClick={() => handleQuestionChange("q1")}
+                onClick={() => handleAnswerChange("")}
               >
-                Load Preset Q1 Answer
-              </button>
-              <button
-                className="btn btn-secondary btn-sm"
-                onClick={() => handleQuestionChange("q3")}
-              >
-                Load Preset Q3 Answer
+                Clear Answer Text
               </button>
               <button
                 className="btn btn-secondary btn-sm"
