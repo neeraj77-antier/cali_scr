@@ -105,6 +105,7 @@ export default function Home() {
   const [apiResponse, setApiResponse] = useState<any>(null);
   const [activeTab, setActiveTab] = useState<"curl" | "response" | "jsonBody">("curl");
   const [generateMessage, setGenerateMessage] = useState<string | null>(null);
+  const [answerView, setAnswerView] = useState<"batch" | "active">("batch");
 
   // Computed Full URL
   const targetUrl = `${baseUrl.replace(/\/$/, "")}/${submissionId}/probe/answer`;
@@ -120,11 +121,9 @@ export default function Home() {
   // Handle Question ID change & sync saved answer for that question
   const handleQuestionChange = (newQId: string) => {
     setQuestionId(newQId);
-    if (answersMap[newQId] !== undefined) {
-      const newAns = answersMap[newQId];
-      setAnswer(newAns);
-      autoCalculateKeystrokes(newAns);
-    }
+    const targetAns = answersMap[newQId] || "";
+    setAnswer(targetAns);
+    autoCalculateKeystrokes(targetAns);
   };
 
   // Handle Answer text change
@@ -132,6 +131,15 @@ export default function Home() {
     setAnswer(newAns);
     setAnswersMap((prev) => ({ ...prev, [questionId]: newAns }));
     autoCalculateKeystrokes(newAns);
+  };
+
+  // Handle Specific Question Answer change (for batch Q1, Q2, Q3 entry)
+  const handleSpecificAnswerChange = (qId: string, newAns: string) => {
+    setAnswersMap((prev) => ({ ...prev, [qId]: newAns }));
+    if (questionId === qId) {
+      setAnswer(newAns);
+      autoCalculateKeystrokes(newAns);
+    }
   };
 
   // Auto-estimate keystrokes based on answer text
@@ -600,73 +608,190 @@ export default function Home() {
         <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}>
           
           <div className="studio-card">
-            <div className="card-header">
+            <div className="card-header" style={{ justifyContent: "space-between", flexWrap: "wrap", gap: "0.5rem" }}>
               <h2 className="card-title">
                 <FileText size={18} color="#10b981" /> Question &amp; Answer Payload
               </h2>
+              <div style={{ display: "flex", gap: "0.25rem", background: "rgba(0,0,0,0.3)", padding: "0.2rem", borderRadius: "8px", border: "1px solid rgba(255,255,255,0.08)" }}>
+                <button
+                  className={`btn btn-sm ${answerView === "batch" ? "btn-primary" : "btn-secondary"}`}
+                  style={{ padding: "0.25rem 0.6rem", fontSize: "0.75rem" }}
+                  onClick={() => setAnswerView("batch")}
+                >
+                  Batch Entry (Q1, Q2, Q3)
+                </button>
+                <button
+                  className={`btn btn-sm ${answerView === "active" ? "btn-primary" : "btn-secondary"}`}
+                  style={{ padding: "0.25rem 0.6rem", fontSize: "0.75rem" }}
+                  onClick={() => setAnswerView("active")}
+                >
+                  Active Focus
+                </button>
+              </div>
             </div>
 
-            {/* Question ID Dropdown & Selector */}
-            <div className="form-group">
-              <label className="form-label">
-                Question ID Dropdown
-                <span className="form-label-note">Select or type custom ID</span>
+            {/* Quick Switcher Buttons */}
+            <div className="form-group" style={{ marginBottom: "1.25rem" }}>
+              <label className="form-label" style={{ marginBottom: "0.5rem" }}>
+                <span>Select Active Question ID for Submission:</span>
+                <span className="form-label-note">Currently selected: <strong>{questionId}</strong></span>
               </label>
-              <div style={{ display: "flex", gap: "0.5rem" }}>
-                <select
-                  className="input-select"
-                  value={questionId}
-                  onChange={(e) => handleQuestionChange(e.target.value)}
-                  style={{ width: "140px" }}
-                >
-                  <option value="q1">q1 (Probe 1)</option>
-                  <option value="q2">q2 (Probe 2)</option>
-                  <option value="q3">q3 (Probe 3)</option>
-                  <option value="q4">q4 (Probe 4)</option>
-                  <option value="q5">q5 (Probe 5)</option>
-                  <option value="custom">Custom ID...</option>
-                </select>
+              <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
+                {["q1", "q2", "q3"].map((qKey) => {
+                  const isSelected = questionId === qKey;
+                  const hasContent = !!answersMap[qKey]?.trim();
+                  return (
+                    <button
+                      key={qKey}
+                      className={`btn btn-sm ${isSelected ? "btn-accent" : "btn-secondary"}`}
+                      onClick={() => handleQuestionChange(qKey)}
+                      style={{
+                        padding: "0.4rem 0.8rem",
+                        borderRadius: "8px",
+                        fontSize: "0.825rem",
+                        border: isSelected ? "1px solid var(--accent-cyan)" : "1px solid rgba(255,255,255,0.1)",
+                      }}
+                    >
+                      {qKey.toUpperCase()}
+                      <span
+                        style={{
+                          fontSize: "0.65rem",
+                          marginLeft: "6px",
+                          padding: "2px 5px",
+                          borderRadius: "4px",
+                          background: isSelected
+                            ? "rgba(255,255,255,0.25)"
+                            : hasContent
+                            ? "rgba(16,185,129,0.2)"
+                            : "rgba(255,255,255,0.06)",
+                          color: isSelected
+                            ? "#fff"
+                            : hasContent
+                            ? "#6ee7b7"
+                            : "var(--text-muted)",
+                        }}
+                      >
+                        {hasContent ? `${answersMap[qKey].length}c` : "empty"}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
 
-                <input
-                  type="text"
-                  className="input-text input-mono"
-                  value={questionId}
-                  onChange={(e) => setQuestionId(e.target.value)}
-                  placeholder="e.g. q1"
+            {/* Batch All Answers Input View */}
+            {answerView === "batch" ? (
+              <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+                {/* Q1 Box */}
+                <div style={{
+                  background: questionId === "q1" ? "rgba(99, 102, 241, 0.1)" : "rgba(0,0,0,0.2)",
+                  border: questionId === "q1" ? "1px solid var(--accent-indigo)" : "1px solid rgba(255,255,255,0.06)",
+                  borderRadius: "10px",
+                  padding: "0.85rem"
+                }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "0.4rem", alignItems: "center" }}>
+                    <span style={{ fontWeight: 600, fontSize: "0.85rem", color: questionId === "q1" ? "#a5b4fc" : "var(--text-main)" }}>
+                      Q1 Answer Content
+                    </span>
+                    {questionId === "q1" && (
+                      <span className="app-badge" style={{ background: "rgba(99, 102, 241, 0.2)", color: "#a5b4fc", borderColor: "rgba(99, 102, 241, 0.4)" }}>
+                        ACTIVE TARGET
+                      </span>
+                    )}
+                  </div>
+                  <textarea
+                    className="input-textarea input-mono"
+                    rows={4}
+                    value={answersMap["q1"] || ""}
+                    onChange={(e) => handleSpecificAnswerChange("q1", e.target.value)}
+                    placeholder="Paste Q1 answer text here..."
+                  />
+                </div>
+
+                {/* Q2 Box */}
+                <div style={{
+                  background: questionId === "q2" ? "rgba(99, 102, 241, 0.1)" : "rgba(0,0,0,0.2)",
+                  border: questionId === "q2" ? "1px solid var(--accent-indigo)" : "1px solid rgba(255,255,255,0.06)",
+                  borderRadius: "10px",
+                  padding: "0.85rem"
+                }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "0.4rem", alignItems: "center" }}>
+                    <span style={{ fontWeight: 600, fontSize: "0.85rem", color: questionId === "q2" ? "#a5b4fc" : "var(--text-main)" }}>
+                      Q2 Answer Content
+                    </span>
+                    {questionId === "q2" && (
+                      <span className="app-badge" style={{ background: "rgba(99, 102, 241, 0.2)", color: "#a5b4fc", borderColor: "rgba(99, 102, 241, 0.4)" }}>
+                        ACTIVE TARGET
+                      </span>
+                    )}
+                  </div>
+                  <textarea
+                    className="input-textarea input-mono"
+                    rows={4}
+                    value={answersMap["q2"] || ""}
+                    onChange={(e) => handleSpecificAnswerChange("q2", e.target.value)}
+                    placeholder="Paste Q2 answer text here..."
+                  />
+                </div>
+
+                {/* Q3 Box */}
+                <div style={{
+                  background: questionId === "q3" ? "rgba(99, 102, 241, 0.1)" : "rgba(0,0,0,0.2)",
+                  border: questionId === "q3" ? "1px solid var(--accent-indigo)" : "1px solid rgba(255,255,255,0.06)",
+                  borderRadius: "10px",
+                  padding: "0.85rem"
+                }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "0.4rem", alignItems: "center" }}>
+                    <span style={{ fontWeight: 600, fontSize: "0.85rem", color: questionId === "q3" ? "#a5b4fc" : "var(--text-main)" }}>
+                      Q3 Answer Content
+                    </span>
+                    {questionId === "q3" && (
+                      <span className="app-badge" style={{ background: "rgba(99, 102, 241, 0.2)", color: "#a5b4fc", borderColor: "rgba(99, 102, 241, 0.4)" }}>
+                        ACTIVE TARGET
+                      </span>
+                    )}
+                  </div>
+                  <textarea
+                    className="input-textarea input-mono"
+                    rows={4}
+                    value={answersMap["q3"] || ""}
+                    onChange={(e) => handleSpecificAnswerChange("q3", e.target.value)}
+                    placeholder="Paste Q3 answer text here..."
+                  />
+                </div>
+              </div>
+            ) : (
+              /* Active Single Answer Focus View */
+              <div className="form-group">
+                <div className="form-label">
+                  <span>Answer Text Content ({questionId})</span>
+                  <span style={{ fontSize: "0.75rem", color: "var(--accent-cyan)", fontFamily: "var(--font-mono)" }}>
+                    Length: {answer.length} chars
+                  </span>
+                </div>
+                <textarea
+                  className="input-textarea input-mono"
+                  rows={8}
+                  value={answer}
+                  onChange={(e) => handleAnswerChange(e.target.value)}
+                  placeholder={`Enter ${questionId} answer text here...`}
                 />
               </div>
-            </div>
-
-            {/* Answer Box */}
-            <div className="form-group">
-              <div className="form-label">
-                <span>Answer Text Content (Accepts code, newlines &amp; all chars)</span>
-                <span style={{ fontSize: "0.75rem", color: "var(--accent-cyan)", fontFamily: "var(--font-mono)" }}>
-                  Length: {answer.length} chars
-                </span>
-              </div>
-              <textarea
-                className="input-textarea input-mono"
-                rows={8}
-                value={answer}
-                onChange={(e) => handleAnswerChange(e.target.value)}
-                placeholder="Enter probe answer text here..."
-              />
-            </div>
+            )}
 
             {/* Quick Answer Actions */}
-            <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
+            <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap", marginTop: "1rem" }}>
               <button
                 className="btn btn-secondary btn-sm"
                 onClick={() => handleAnswerChange("")}
               >
-                Clear Answer Text
+                Clear Active Answer
               </button>
               <button
                 className="btn btn-secondary btn-sm"
                 onClick={() => autoCalculateKeystrokes(answer)}
               >
-                <RefreshCw size={12} /> Sync Keystroke Length
+                <RefreshCw size={12} /> Sync Keystroke Length ({answer.length})
               </button>
             </div>
 
