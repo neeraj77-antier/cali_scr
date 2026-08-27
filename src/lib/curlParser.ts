@@ -19,8 +19,8 @@ export function parseCurlCommand(curlText: string): ParsedCurl {
 
   if (!curlText || typeof curlText !== "string") return result;
 
-  // Normalize continuation backslashes at end of lines
-  const normalized = curlText.replace(/\\\s*\r?\n/g, " ");
+  // Normalize bash continuation backslashes at end of lines & bash $'...' strings
+  let normalized = curlText.replace(/\\\s*\r?\n/g, " ");
 
   // Extract URL
   const urlMatch = normalized.match(/curl\s+(?:--location\s+)?['"]?([^'"]\S+)['"]?/i) || 
@@ -57,11 +57,12 @@ export function parseCurlCommand(curlText: string): ParsedCurl {
   }
 
   // Extract Body Data (--data, --data-raw, --data-binary, -d)
-  const dataRegex = /(?:--data|--data-raw|--data-binary|-d)\s+('([\s\S]*?)'|"([\s\S]*?)")/i;
-  const dataMatch = normalized.match(dataRegex);
+  const dataRegex = /(?:--data|--data-raw|--data-binary|-d)\s+(\$?['"]([\s\S]*?)['"]|\$?['"]([\s\S]*?)['"])/i;
+  const dataMatch = normalized.match(/(?:--data|--data-raw|--data-binary|-d)\s+\$?['"]([\s\S]*?)['"](?=\s+--|\s*$)/i) ||
+                    normalized.match(/(?:--data|--data-raw|--data-binary|-d)\s+['"]([\s\S]*?)['"]/i);
 
   if (dataMatch) {
-    let rawBody = dataMatch[2] !== undefined ? dataMatch[2] : dataMatch[3];
+    let rawBody = dataMatch[1];
     if (rawBody) {
       // Unescape bash single quote sequence: '\'' -> '
       rawBody = rawBody.replace(/'\\''/g, "'");
@@ -69,7 +70,7 @@ export function parseCurlCommand(curlText: string): ParsedCurl {
       try {
         result.bodyData = JSON.parse(rawBody);
       } catch (e) {
-        // Fallback: try finding first '{' to last '}' if trailing chars exist
+        // Fallback: try finding first '{' to last '}'
         const firstBrace = rawBody.indexOf("{");
         const lastBrace = rawBody.lastIndexOf("}");
         if (firstBrace !== -1 && lastBrace > firstBrace) {
@@ -82,6 +83,30 @@ export function parseCurlCommand(curlText: string): ParsedCurl {
           result.bodyData = rawBody;
         }
       }
+    }
+  }
+
+  // Detect if parsed URL was a Next.js /api/proxy wrapper call and unwrap the actual target payload
+  if (result.url.includes("/api/proxy") && result.bodyData && typeof result.bodyData === "object") {
+    const proxyPayload = result.bodyData;
+    if (proxyPayload.targetUrl) {
+      result.url = proxyPayload.targetUrl;
+      const subMatch = result.url.match(/\/submissions\/([^\/]+)\/probe/i);
+      if (subMatch) {
+        result.submissionId = subMatch[1];
+      }
+    }
+    if (proxyPayload.headers && typeof proxyPayload.headers === "object") {
+      result.headers = { ...result.headers, ...proxyPayload.headers };
+      if (proxyPayload.headers.authorization || proxyPayload.headers.Authorization) {
+        result.authorization = proxyPayload.headers.authorization || proxyPayload.headers.Authorization;
+      }
+      if (proxyPayload.headers.Cookie || proxyPayload.headers.cookie) {
+        result.cookie = proxyPayload.headers.Cookie || proxyPayload.headers.cookie;
+      }
+    }
+    if (proxyPayload.body) {
+      result.bodyData = proxyPayload.body;
     }
   }
 
