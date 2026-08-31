@@ -18,11 +18,14 @@ import {
   Database,
   Lock,
   Unlock,
-  ShieldAlert
+  ShieldAlert,
+  MessageSquare,
+  Send,
+  CheckCircle2,
+  ListOrdered,
+  Layers,
+  HelpCircle
 } from "lucide-react";
-
-// Empty initial answers dictionary by default
-const INITIAL_ANSWERS: Record<string, string> = {};
 
 export default function Home() {
   // Authentication & Security States
@@ -31,9 +34,78 @@ export default function Home() {
   const [authError, setAuthError] = useState<string>("");
   const [isMounted, setIsMounted] = useState<boolean>(false);
 
-  // Main Config States
+  // Active Studio Mode: "probe" | "interview"
+  const [studioMode, setStudioMode] = useState<"probe" | "interview">("interview");
+
+  // Main Config States - Probe Submissions
   const [submissionId, setSubmissionId] = useState("");
-  const [baseUrl, setBaseUrl] = useState("https://caliber.antiers.work/api/v1/submissions");
+  const [probeBaseUrl, setProbeBaseUrl] = useState("https://caliber.antiers.work/api/v1/submissions");
+
+  // Main Config States - Interview Studio
+  const [moduleId, setModuleId] = useState("f147f619-a3cc-4c10-b134-3d78ebd2a7ca");
+  const [interviewId, setInterviewId] = useState("bb7a6e59-7c1d-40af-b803-8ef1e9c50b6e");
+  const [interviewStatus, setInterviewStatus] = useState<"not_started" | "active" | "completed">("not_started");
+  const [interviewAction, setInterviewAction] = useState<"start" | "message" | "complete">("start");
+  const [currentQuestion, setCurrentQuestion] = useState<string>("");
+  const [interviewAnswer, setInterviewAnswer] = useState<string>("");
+  const [interviewHistory, setInterviewHistory] = useState<Array<{ role: "interviewer" | "candidate"; text: string; timestamp: string }>>([]);
+
+  // Shared Headers State
+  const [authorization, setAuthorization] = useState(
+    "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI4YzY3YzRkOC0yYzlmLTQxMDgtYThmZi00MGM4MGNhNDlkNDEiLCJlbWFpbCI6Im11c2thbi5zYWluaUBhbnRpZXJzb2x1dGlvbnMuY29tIiwicm9sZSI6ImxlYXJuZXIiLCJvcmdJZCI6ImZkNzk1NTBlLTBkYjctNDE1NS04MjgwLWVhM2MwMThhZjE5MyIsImp0aSI6IjlmNDhiNWRiLWIwOTItNDljYi1iOWJiLTNjM2JjOGVjYjI3MiIsImlhdCI6MTc4ODE3ODg2OCwiZXhwIjoxNzg4MTc5NzY4fQ.6bm8LWz0owaRYAlnei_D4S1CI-HUJEzZwXXy3pm3FFA"
+  );
+  const [cookie, setCookie] = useState(
+    "lr_hb-xwvneq%2Fcaliber={%22heartbeat%22:1788168962728}; lr_tabs-xwvneq%2Fcaliber={%22recordingID%22:%226-01a0572c-9782-7b1b-9147-1b93d3fe22ec%22%2C%22sessionID%22:0%2C%22lastActivity%22:1788169009517%2C%22hasActivity%22:false%2C%22confirmed%22:true%2C%22clearsIdentifiedUser%22:false}; refresh_token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI4YzY3YzRkOC0yYzlmLTQxMDgtYThmZi00MGM4MGNhNDlkNDEiLCJub25jZSI6IjVkMDgyZWMyLTBhODItNDBkMC1hN2E3LTRkYzZkN2M5OTRiNSIsImlhdCI6MTc4ODE3ODg2OCwiZXhwIjoxNzg4Nzg3NjY4fQ.yhoHScHR-Q-R4ZDdN9FybvzBSG_N03HiSjdQopeRoGg; access_token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI4YzY3YzRkOC0yYzlmLTQxMDgtYThmZi00MGM4MGNhNDlkNDEiLCJlbWFpbCI6Im11c2thbi5zYWluaUBhbnRpZXJzb2x1dGlvbnMuY29tIiwicm9sZSI6ImxlYXJuZXIiLCJvcmdJZCI6ImZkNzk1NTBlLTBkYjctNDE1NS04MjgwLWVhM2MwMThhZjE5MyIsImp0aSI6IjlmNDhiNWRiLWIwOTItNDljYi1iOWJiLTNjM2JjOGVjYjI3MiIsImlhdCI6MTc4ODE3ODg2OCwiZXhwIjoxNzg4MTc5NzY4fQ.6bm8LWz0owaRYAlnei_D4S1CI-HUJEzZwXXy3pm3FFA"
+  );
+
+  // Secondary cURL Input State
+  const [secondaryCurl, setSecondaryCurl] = useState("");
+  const [secondaryStatus, setSecondaryStatus] = useState<{ type: "success" | "error" | "info"; msg: string } | null>(null);
+
+  // Probe Payload Body States
+  const [questionId, setQuestionId] = useState("q1");
+  const [answersMap, setAnswersMap] = useState<Record<string, string>>({});
+  const [probeAnswer, setProbeAnswer] = useState("");
+  const [answerView, setAnswerView] = useState<"batch" | "active">("batch");
+
+  // Interview Metadata State
+  const [interviewMetadata, setInterviewMetadata] = useState({
+    pasteEvents: 0,
+    focusLossCount: 0,
+    focusLossMs: 0,
+    timeOnTaskMs: 0,
+    viewedAt: new Date().toISOString(),
+  });
+
+  // Keystroke Metrics State
+  const [keystroke, setKeystroke] = useState({
+    keystrokeCount: 0,
+    backspaceCount: 0,
+    finalLength: 0,
+    avgIntervalMs: 147,
+    intervalStdDevMs: 515,
+    unmatchedInsertionChars: 0,
+    compositionCharsTotal: 0,
+    compositionEventCount: 0,
+    compositionDurationMs: 0,
+  });
+
+  // Automation Flags State
+  const [automation, setAutomation] = useState({
+    webdriver: false,
+    noPlugins: false,
+    noChromeRuntime: false,
+    languagesEmpty: false,
+    noMouseMovement: false,
+    suspicious: false,
+  });
+
+  // UI & Execution States
+  const [copied, setCopied] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [apiResponse, setApiResponse] = useState<any>(null);
+  const [activeTab, setActiveTab] = useState<"curl" | "response" | "jsonBody">("curl");
+  const [generateMessage, setGenerateMessage] = useState<string | null>(null);
 
   useEffect(() => {
     setIsMounted(true);
@@ -59,93 +131,128 @@ export default function Home() {
     setIsAuthenticated(false);
     localStorage.removeItem("caliber_studio_auth");
   };
-  
-  // Headers State
-  const [authorization, setAuthorization] = useState(
-    "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI2NjI0YzI5YS0yODMzLTQzMGItYTc0ZC0zZjFhY2M3ZWU0MzUiLCJlbWFpbCI6Im5lZXJhai5rdW1hckBhbnRpZXJzb2x1dGlvbnMuY29tIiwicm9sZSI6ImxlYXJuZXIiLCJvcmdJZCI6ImZkNzk1NTBlLTBkYjctNDE1NS04MjgwLWVhM2MwMThhZjE5MyIsImp0aSI6ImQ1YmY1YjgwLWFlMDktNGRlYy05YjZlLTRhNmYyNDQ2ZDU3OCIsImlhdCI6MTc4NzcyOTE2OSwiZXhwIjoxNzg3NzMwMDY5fQ.BXhrO7MyirLU4a5xFUjPGRtRpoS5oT-lHllpEolnl_U"
-  );
-  const [cookie, setCookie] = useState(
-    "refresh_token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI2NjI0YzI5YS0yODMzLTQzMGItYTc0ZC0zZjFhY2M3ZWU0MzUiLCJub25jZSI6IjA0YTRiMWIzLWIxNWMtNGRiMy04ZmRiLTg5MWY1MTA2NzVlZiIsImlhdCI6MTc4NzcyOTE2OSwiZXhwIjoxNzg4MzMzOTY5fQ.uJMZc6DVO8nBJGpnBvzYd0HWbt44QnAWGxQbRYqV-iM; access_token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI2NjI0YzI5YS0yODMzLTQzMGItYTc0ZC0zZjFhY2M3ZWU0MzUiLCJlbWFpbCI6Im5lZXJhai5rdW1hckBhbnRpZXJzb2x1dGlvbnMuY29tIiwicm9sZSI6ImxlYXJuZXIiLCJvcmdJZCI6ImZkNzk1NTBlLTBkYjctNDE1NS04MjgwLWVhM2MwMThhZjE5MyIsImp0aSI6ImQ1YmY1YjgwLWFlMDktNGRlYy05YjZlLTRhNmYyNDQ2ZDU3OCIsImlhdCI6MTc4NzcyOTE2OSwiZXhwIjoxNzg3NzMwMDY5fQ.BXhrO7MyirLU4a5xFUjPGRtRpoS5oT-lHllpEolnl_U; _lr_hb_-xwvneq%2Fcaliber={%22heartbeat%22:1787729383193}; _lr_tabs_-xwvneq%2Fcaliber={%22recordingID%22:%226-01a03c78-1c0e-7338-a5a7-4d3b768c89b3%22%2C%22sessionID%22:0%2C%22lastActivity%22:1787729383341%2C%22hasActivity%22:true%2C%22confirmed%22:true%2C%22clearsIdentifiedUser%22:false}"
-  );
 
-  // Secondary cURL Input State
-  const [secondaryCurl, setSecondaryCurl] = useState("");
-  const [secondaryStatus, setSecondaryStatus] = useState<{ type: "success" | "error" | "info"; msg: string } | null>(null);
+  // Helper for computing active cURL target URL & payload
+  const getActiveEndpoint = () => {
+    if (studioMode === "probe") {
+      return `${probeBaseUrl.replace(/\/$/, "")}/${submissionId}/probe/answer`;
+    }
+    if (interviewAction === "start") {
+      return "https://caliber.antiers.work/api/v1/interviews";
+    }
+    if (interviewAction === "complete") {
+      return `https://caliber.antiers.work/api/v1/interviews/${interviewId}/complete`;
+    }
+    return `https://caliber.antiers.work/api/v1/interviews/${interviewId}/message`;
+  };
 
-  // Payload Body States - Empty by default
-  const [questionId, setQuestionId] = useState("q1");
-  const [answersMap, setAnswersMap] = useState<Record<string, string>>({});
-  const [answer, setAnswer] = useState("");
+  const getActivePayload = () => {
+    if (studioMode === "probe") {
+      return {
+        questionId,
+        answer: probeAnswer,
+        keystroke,
+        automation,
+      };
+    }
+    if (interviewAction === "start") {
+      return { moduleId };
+    }
+    if (interviewAction === "complete") {
+      return {
+        metadata: {
+          ...interviewMetadata,
+          viewedAt: new Date().toISOString(),
+          keystroke: {
+            ...keystroke,
+            finalLength: 0,
+          },
+          automation,
+        },
+      };
+    }
+    return {
+      content: interviewAnswer,
+      metadata: {
+        ...interviewMetadata,
+        viewedAt: new Date().toISOString(),
+        keystroke: {
+          ...keystroke,
+          finalLength: interviewAnswer.length,
+        },
+        automation,
+      },
+    };
+  };
 
-  // Keystroke Metrics State
-  const [keystroke, setKeystroke] = useState({
-    keystrokeCount: 0,
-    backspaceCount: 0,
-    finalLength: 0,
-    avgIntervalMs: 147,
-    intervalStdDevMs: 515,
-    unmatchedInsertionChars: 0,
-    compositionCharsTotal: 0,
-    compositionEventCount: 0,
-    compositionDurationMs: 0,
-  });
+  const targetUrl = getActiveEndpoint();
+  const payloadObject = getActivePayload();
+  const jsonBodyString = JSON.stringify(payloadObject, null, 2);
+  const bashSafeJson = jsonBodyString.replace(/'/g, "'\\''");
 
-  // Automation Flags State
-  const [automation, setAutomation] = useState({
-    webdriver: false,
-    noPlugins: false,
-    noChromeRuntime: false,
-    noMouseMovement: false,
-    suspicious: false,
-  });
-
-  // UI & Execution States
-  const [copied, setCopied] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [apiResponse, setApiResponse] = useState<any>(null);
-  const [activeTab, setActiveTab] = useState<"curl" | "response" | "jsonBody">("curl");
-  const [generateMessage, setGenerateMessage] = useState<string | null>(null);
-  const [answerView, setAnswerView] = useState<"batch" | "active">("batch");
-
-  // Computed Full URL
-  const targetUrl = `${baseUrl.replace(/\/$/, "")}/${submissionId}/probe/answer`;
+  const generatedCurl = `curl --location '${targetUrl}' \\
+--header 'accept: application/json, text/plain, */*' \\
+--header 'accept-language: en-US,en;q=0.9' \\
+--header 'authorization: ${authorization}' \\
+--header 'content-type: application/json' \\
+--header 'origin: https://caliber.antiers.work' \\
+--header 'priority: u=1, i' \\
+--header 'referer: https://caliber.antiers.work/dashboard/modules/${moduleId}' \\
+--header 'sec-ch-ua: "Not(A:Brand";v="8", "Chromium";v="144", "Google Chrome";v="144"' \\
+--header 'sec-ch-ua-mobile: ?0' \\
+--header 'sec-ch-ua-platform: "Linux"' \\
+--header 'sec-fetch-dest: empty' \\
+--header 'sec-fetch-mode: cors' \\
+--header 'sec-fetch-site: same-origin' \\
+--header 'user-agent: Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36' \\
+--header 'Cookie: ${cookie}' \\
+--data '${bashSafeJson}'`;
 
   // Explicitly Trigger Fresh cURL Generation & Focus Tab
   const handleGenerateNewCurl = () => {
     setActiveTab("curl");
-    autoCalculateKeystrokes(answer);
+    if (studioMode === "probe") {
+      autoCalculateKeystrokes(probeAnswer);
+    } else {
+      autoCalculateKeystrokes(interviewAnswer);
+    }
     setGenerateMessage("Fresh cURL command generated with updated payload!");
     setTimeout(() => setGenerateMessage(null), 3000);
   };
 
-  // Handle Question ID change & sync saved answer for that question
+  // Handle Question ID change & sync saved answer for Probe Studio
   const handleQuestionChange = (newQId: string) => {
     setQuestionId(newQId);
     const targetAns = answersMap[newQId] || "";
-    setAnswer(targetAns);
+    setProbeAnswer(targetAns);
     autoCalculateKeystrokes(targetAns);
   };
 
-  // Handle Answer text change
-  const handleAnswerChange = (newAns: string) => {
-    setAnswer(newAns);
+  // Handle Probe Answer text change
+  const handleProbeAnswerChange = (newAns: string) => {
+    setProbeAnswer(newAns);
     setAnswersMap((prev) => ({ ...prev, [questionId]: newAns }));
     autoCalculateKeystrokes(newAns);
   };
 
-  // Handle Specific Question Answer change (for batch Q1, Q2, Q3 entry)
   const handleSpecificAnswerChange = (qId: string, newAns: string) => {
     setAnswersMap((prev) => ({ ...prev, [qId]: newAns }));
     if (questionId === qId) {
-      setAnswer(newAns);
+      setProbeAnswer(newAns);
       autoCalculateKeystrokes(newAns);
     }
+  };
+
+  // Handle Interview Answer text change
+  const handleInterviewAnswerChange = (newAns: string) => {
+    setInterviewAnswer(newAns);
+    autoCalculateKeystrokes(newAns);
   };
 
   // Auto-estimate keystrokes based on answer text
   const autoCalculateKeystrokes = (text: string) => {
     const len = text.length;
-    const bs = keystroke.backspaceCount || 120;
+    const bs = keystroke.backspaceCount || 0;
     setKeystroke((prev) => ({
       ...prev,
       finalLength: len,
@@ -153,7 +260,7 @@ export default function Home() {
     }));
   };
 
-  // Analyze Secondary cURL and extract Authorization, Cookie, Submission ID & Body
+  // Analyze Secondary cURL and extract Authorization, Cookie, Submission ID, Interview ID, Module ID & Body
   const handleParseSecondaryCurl = () => {
     if (!secondaryCurl.trim()) {
       setSecondaryStatus({ type: "error", msg: "Please paste a secondary cURL request first!" });
@@ -181,20 +288,72 @@ export default function Home() {
         setSubmissionId(parsed.submissionId);
         updatedCount++;
         extractedFields.push("Submission ID");
+        setStudioMode("probe");
+      }
+
+      if (parsed.interviewId) {
+        setInterviewId(parsed.interviewId);
+        updatedCount++;
+        extractedFields.push("Interview ID");
+        setStudioMode("interview");
+
+        // Detect action from URL suffix
+        if (parsed.url.includes("/complete")) {
+          setInterviewAction("complete");
+          extractedFields.push("Action → Complete Test");
+        } else if (parsed.url.includes("/message")) {
+          setInterviewAction("message");
+          extractedFields.push("Action → Submit Answer");
+        }
+      }
+
+      // Start Interview: URL is /interviews with no UUID — only moduleId in body
+      if (!parsed.interviewId && parsed.url.match(/\/interviews\s*$|\/interviews['"]?\s/i)) {
+        setStudioMode("interview");
+        setInterviewAction("start");
+        updatedCount++;
+        extractedFields.push("Action → Start Interview");
+      }
+
+      if (parsed.moduleId) {
+        setModuleId(parsed.moduleId);
+        updatedCount++;
+        extractedFields.push("Module ID");
       }
 
       if (parsed.bodyData && typeof parsed.bodyData === "object") {
-        const qId = parsed.bodyData.questionId || questionId;
         if (parsed.bodyData.questionId) {
-          setQuestionId(parsed.bodyData.questionId);
+          const qId = parsed.bodyData.questionId;
+          setQuestionId(qId);
           extractedFields.push("Question ID");
         }
+
         if (typeof parsed.bodyData.answer === "string") {
-          setAnswer(parsed.bodyData.answer);
-          setAnswersMap((prev) => ({ ...prev, [qId]: parsed.bodyData.answer }));
+          setProbeAnswer(parsed.bodyData.answer);
+          setAnswersMap((prev) => ({ ...prev, [parsed.bodyData.questionId || questionId]: parsed.bodyData.answer }));
           autoCalculateKeystrokes(parsed.bodyData.answer);
-          extractedFields.push("Answer Text");
+          extractedFields.push("Probe Answer");
         }
+
+        if (typeof parsed.bodyData.content === "string") {
+          setInterviewAnswer(parsed.bodyData.content);
+          autoCalculateKeystrokes(parsed.bodyData.content);
+          extractedFields.push("Interview Answer Content");
+          setStudioMode("interview");
+          setInterviewAction("message");
+        }
+
+        if (parsed.bodyData.metadata && typeof parsed.bodyData.metadata === "object") {
+          setInterviewMetadata((prev) => ({ ...prev, ...parsed.bodyData.metadata }));
+          if (parsed.bodyData.metadata.keystroke) {
+            setKeystroke((prev) => ({ ...prev, ...parsed.bodyData.metadata.keystroke }));
+          }
+          if (parsed.bodyData.metadata.automation) {
+            setAutomation((prev) => ({ ...prev, ...parsed.bodyData.metadata.automation }));
+          }
+          extractedFields.push("Interview Metadata");
+        }
+
         if (parsed.bodyData.keystroke && typeof parsed.bodyData.keystroke === "object") {
           setKeystroke((prev) => ({ ...prev, ...parsed.bodyData.keystroke }));
           extractedFields.push("Keystrokes");
@@ -214,47 +373,13 @@ export default function Home() {
       } else {
         setSecondaryStatus({
           type: "info",
-          msg: "No Authorization, Cookie, or JSON Body detected in the pasted cURL. Make sure it contains valid headers and body.",
+          msg: "No Authorization, Cookie, or JSON Body detected in the pasted cURL.",
         });
       }
     } catch (err: any) {
       setSecondaryStatus({ type: "error", msg: `Failed to parse cURL: ${err.message}` });
     }
   };
-
-  // Construct JSON Payload Object
-  const payloadObject = {
-    questionId,
-    answer,
-    keystroke,
-    automation,
-  };
-
-  // Formatted JSON string
-  const jsonBodyString = JSON.stringify(payloadObject, null, 2);
-  // Escape single quotes for bash execution: ' -> '\''
-  const bashSafeJson = jsonBodyString.replace(/'/g, "'\\''");
-
-  // Generate runnable cURL string
-  const generatedCurl = `curl --location '${targetUrl}' \\
---header 'accept: application/json, text/plain, */*' \\
---header 'accept-language: en-GB,en-US;q=0.9,en;q=0.8,hi;q=0.7' \\
---header 'authorization: ${authorization}' \\
---header 'cache-control: no-cache' \\
---header 'content-type: application/json' \\
---header 'origin: https://caliber.antiers.work' \\
---header 'pragma: no-cache' \\
---header 'priority: u=1, i' \\
---header 'referer: https://caliber.antiers.work/dashboard/modules/5583e11c-d61e-4e31-8b8a-2167fb15379f' \\
---header 'sec-ch-ua: "Chromium";v="142", "Google Chrome";v="142", "Not_A Brand";v="99"' \\
---header 'sec-ch-ua-mobile: ?0' \\
---header 'sec-ch-ua-platform: "Linux"' \\
---header 'sec-fetch-dest: empty' \\
---header 'sec-fetch-mode: cors' \\
---header 'sec-fetch-site: same-origin' \\
---header 'user-agent: Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36' \\
---header 'Cookie: ${cookie}' \\
---data '${bashSafeJson}'`;
 
   // Copy cURL to Clipboard
   const handleCopyCurl = () => {
@@ -263,22 +388,105 @@ export default function Home() {
     setTimeout(() => setCopied(false), 2000);
   };
 
+  // Helper to extract question/message from API response
+  const extractQuestionFromResponse = (data: any): string | null => {
+    if (!data) return null;
+    if (typeof data === "string") return data;
+
+    // Check common interview response formats
+    if (data.question) return data.question;
+    if (data.content) return data.content;
+    if (data.message) return data.message;
+    if (data.nextQuestion) return data.nextQuestion;
+    
+    if (Array.isArray(data.messages) && data.messages.length > 0) {
+      const last = data.messages[data.messages.length - 1];
+      if (typeof last === "string") return last;
+      if (last?.content) return last.content;
+      if (last?.text) return last.text;
+    }
+
+    if (data.interview?.messages && Array.isArray(data.interview.messages)) {
+      const last = data.interview.messages[data.interview.messages.length - 1];
+      if (last?.content) return last.content;
+    }
+
+    if (data.data) {
+      return extractQuestionFromResponse(data.data);
+    }
+
+    return null;
+  };
+
+  // Helper to extract Interview ID from Start Interview response
+  const extractInterviewIdFromResponse = (data: any): string | null => {
+    if (!data) return null;
+    if (typeof data !== "object") return null;
+
+    if (data.id && typeof data.id === "string") return data.id;
+    if (data.interviewId && typeof data.interviewId === "string") return data.interviewId;
+    if (data._id && typeof data._id === "string") return data._id;
+    if (data.interview && data.interview.id) return data.interview.id;
+    if (data.data) return extractInterviewIdFromResponse(data.data);
+
+    return null;
+  };
+
   // Execute API Request via Next.js Proxy Route
-  const handleExecuteRequest = async () => {
+  const handleExecuteRequest = async (overrideAction?: "start" | "message" | "complete") => {
+    const currentAct = overrideAction || (studioMode === "interview" ? interviewAction : "start");
+    
     setLoading(true);
     setApiResponse(null);
     setActiveTab("response");
 
+    let reqUrl = targetUrl;
+    let reqBody = payloadObject;
+
+    if (studioMode === "interview" && overrideAction) {
+      setInterviewAction(overrideAction);
+      if (overrideAction === "start") {
+        reqUrl = "https://caliber.antiers.work/api/v1/interviews";
+        reqBody = { moduleId };
+      } else if (overrideAction === "message") {
+        reqUrl = `https://caliber.antiers.work/api/v1/interviews/${interviewId}/message`;
+        reqBody = {
+          content: interviewAnswer,
+          metadata: {
+            ...interviewMetadata,
+            viewedAt: new Date().toISOString(),
+            keystroke: {
+              ...keystroke,
+              finalLength: interviewAnswer.length,
+            },
+            automation,
+          },
+        };
+      } else if (overrideAction === "complete") {
+        reqUrl = `https://caliber.antiers.work/api/v1/interviews/${interviewId}/complete`;
+        reqBody = {
+          metadata: {
+            ...interviewMetadata,
+            viewedAt: new Date().toISOString(),
+            keystroke: {
+              ...keystroke,
+              finalLength: 0,
+            },
+            automation,
+          },
+        };
+      }
+    }
+
     const reqHeaders = {
       "accept": "application/json, text/plain, */*",
-      "accept-language": "en-GB,en-US;q=0.9,en;q=0.8,hi;q=0.7",
+      "accept-language": "en-US,en;q=0.9",
       "authorization": authorization,
-      "cache-control": "no-cache",
       "content-type": "application/json",
       "origin": "https://caliber.antiers.work",
-      "pragma": "no-cache",
-      "referer": "https://caliber.antiers.work/dashboard/modules/5583e11c-d61e-4e31-8b8a-2167fb15379f",
-      "user-agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36",
+      "priority": "u=1, i",
+      "referer": `https://caliber.antiers.work/dashboard/modules/${moduleId}`,
+      "user-agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36",
       "Cookie": cookie,
     };
 
@@ -287,15 +495,49 @@ export default function Home() {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
-          targetUrl,
+          targetUrl: reqUrl,
           headers: reqHeaders,
           method: "POST",
-          body: payloadObject,
+          body: reqBody,
         }),
       });
 
-      const data = await res.json();
-      setApiResponse(data);
+      const resData = await res.json();
+      setApiResponse(resData);
+
+      // Post-Processing for Interview Actions
+      if (studioMode === "interview" && resData.ok) {
+        if (currentAct === "start") {
+          const newIntId = extractInterviewIdFromResponse(resData.data);
+          if (newIntId) {
+            setInterviewId(newIntId);
+          }
+          setInterviewStatus("active");
+
+          const questionText = extractQuestionFromResponse(resData.data) || "Interview started! Please write your response below.";
+          setCurrentQuestion(questionText);
+          setInterviewHistory([
+            { role: "interviewer", text: questionText, timestamp: new Date().toLocaleTimeString() }
+          ]);
+          setGenerateMessage(`Interview started successfully! Interview ID: ${newIntId || interviewId}`);
+        } else if (currentAct === "message") {
+          const newQuestion = extractQuestionFromResponse(resData.data) || "Next question received!";
+          
+          setInterviewHistory((prev) => [
+            ...prev,
+            { role: "candidate", text: interviewAnswer, timestamp: new Date().toLocaleTimeString() },
+            { role: "interviewer", text: newQuestion, timestamp: new Date().toLocaleTimeString() },
+          ]);
+
+          setCurrentQuestion(newQuestion);
+          setInterviewAnswer("");
+          setGenerateMessage("Answer submitted successfully! Received next question.");
+        } else if (currentAct === "complete") {
+          setInterviewStatus("completed");
+          setGenerateMessage("Interview test completed and submitted successfully!");
+        }
+        setTimeout(() => setGenerateMessage(null), 4000);
+      }
     } catch (err: any) {
       setApiResponse({ error: err.message || "Network error occurred" });
     } finally {
@@ -316,7 +558,6 @@ export default function Home() {
 
     try {
       const parsed: ParsedCurl = parseCurlCommand(secondaryCurl);
-      
       const execUrl = parsed.url || targetUrl;
       const execHeaders: Record<string, string> = { ...parsed.headers };
 
@@ -397,7 +638,7 @@ export default function Home() {
           <div>
             <h2 style={{ fontSize: "1.35rem", fontWeight: 700, color: "var(--text-main)" }}>Protected Studio Access</h2>
             <p style={{ fontSize: "0.825rem", color: "var(--text-muted)", marginTop: "0.35rem" }}>
-              Enter security password to access Caliber Probe Studio.
+              Enter security password to access Caliber Probe &amp; Interview Studio.
             </p>
           </div>
 
@@ -439,16 +680,16 @@ export default function Home() {
           </div>
           <div>
             <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-              <h1 className="app-title">Caliber Probe API Studio</h1>
+              <h1 className="app-title">Caliber API Studio</h1>
               <span className="app-badge">Next.js 15</span>
             </div>
-            <p className="app-subtitle">Extract headers, customize question payload &amp; keystrokes, and trigger submissions.</p>
+            <p className="app-subtitle">Probe Submissions &amp; AI Interview Automation Studio.</p>
           </div>
         </div>
 
-        <div style={{ display: "flex", gap: "0.75rem", flexWrap: "wrap" }}>
+        <div style={{ display: "flex", gap: "0.75rem", flexWrap: "wrap", alignItems: "center" }}>
           <button className="btn btn-accent" onClick={handleGenerateNewCurl}>
-            <Sparkles size={16} /> Generate New cURL
+            <Sparkles size={16} /> Refresh cURL
           </button>
           <button className="btn btn-secondary" onClick={handleLock} title="Lock session">
             <Lock size={16} /> Lock
@@ -457,64 +698,190 @@ export default function Home() {
             {copied ? <Check size={16} color="#10b981" /> : <Copy size={16} />}
             {copied ? "Copied!" : "Copy cURL"}
           </button>
-          <button className="btn btn-primary" onClick={handleExecuteRequest} disabled={loading}>
+          <button className="btn btn-primary" onClick={() => handleExecuteRequest()} disabled={loading}>
             {loading ? <RefreshCw size={16} className="spin" /> : <Play size={16} />}
-            {loading ? "Sending..." : "Execute API Request"}
+            {loading ? "Executing..." : "Execute API Request"}
           </button>
         </div>
       </header>
 
+      {/* Main Studio Mode Switcher Nav */}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "1rem" }}>
+        <nav className="section-nav">
+          <button
+            className={`section-nav-btn ${studioMode === "interview" ? "active" : ""}`}
+            onClick={() => setStudioMode("interview")}
+          >
+            <MessageSquare size={18} color={studioMode === "interview" ? "#a5b4fc" : undefined} />
+            AI Interviews Studio
+          </button>
+
+          <button
+            className={`section-nav-btn ${studioMode === "probe" ? "active" : ""}`}
+            onClick={() => setStudioMode("probe")}
+          >
+            <Layers size={18} color={studioMode === "probe" ? "#67e8f9" : undefined} />
+            Probe Submissions Studio
+          </button>
+        </nav>
+
+        {studioMode === "interview" && (
+          <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+            <span style={{ fontSize: "0.8rem", color: "var(--text-muted)" }}>Interview Status:</span>
+            <span
+              className="app-badge"
+              style={{
+                background:
+                  interviewStatus === "completed"
+                    ? "rgba(16,185,129,0.2)"
+                    : interviewStatus === "active"
+                    ? "rgba(99,102,241,0.2)"
+                    : "rgba(245,158,11,0.2)",
+                color:
+                  interviewStatus === "completed"
+                    ? "#6ee7b7"
+                    : interviewStatus === "active"
+                    ? "#a5b4fc"
+                    : "#fcd34d",
+                borderColor:
+                  interviewStatus === "completed"
+                    ? "rgba(16,185,129,0.4)"
+                    : interviewStatus === "active"
+                    ? "rgba(99,102,241,0.4)"
+                    : "rgba(245,158,11,0.4)",
+              }}
+            >
+              {interviewStatus === "completed" ? "COMPLETED" : interviewStatus === "active" ? "IN PROGRESS" : "NOT STARTED"}
+            </span>
+          </div>
+        )}
+      </div>
+
       {generateMessage && (
-        <div className="alert-banner alert-success" style={{ marginBottom: "1rem" }}>
+        <div className="alert-banner alert-success">
           <ShieldCheck size={18} /> {generateMessage}
         </div>
       )}
 
       {/* Main Studio Grid */}
       <div className="studio-grid">
-        {/* Left Column: API Credentials & Header Token Extractor */}
+        {/* Left Column: API Credentials & Header Extractor */}
         <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}>
           
-          {/* Card 1: Submission Endpoint & Query ID */}
-          <div className="studio-card">
-            <div className="card-header">
-              <h2 className="card-title">
-                <Database size={18} color="#6366f1" /> Endpoint Configuration
-              </h2>
-              <span className="form-label-note">POST Method</span>
-            </div>
+          {/* Card 1: Active Endpoint Configuration */}
+          {studioMode === "probe" ? (
+            <div className="studio-card">
+              <div className="card-header">
+                <h2 className="card-title">
+                  <Database size={18} color="#6366f1" /> Probe Endpoint Configuration
+                </h2>
+                <span className="form-label-note">POST Method</span>
+              </div>
 
-            <div className="form-group">
-              <label className="form-label">
-                Submission ID (URL Path parameter)
-                <span className="form-label-note">Auto-updates target URL</span>
-              </label>
-              <input
-                type="text"
-                className="input-text input-mono"
-                value={submissionId}
-                onChange={(e) => setSubmissionId(e.target.value)}
-                placeholder="e.g. 568744f7-c0b1-499c-8c91-bc99330f4202"
-              />
-            </div>
+              <div className="form-group">
+                <label className="form-label">
+                  Submission ID (URL Path parameter)
+                  <span className="form-label-note">Auto-updates target URL</span>
+                </label>
+                <input
+                  type="text"
+                  className="input-text input-mono"
+                  value={submissionId}
+                  onChange={(e) => setSubmissionId(e.target.value)}
+                  placeholder="e.g. 568744f7-c0b1-499c-8c91-bc99330f4202"
+                />
+              </div>
 
-            <div className="form-group">
-              <label className="form-label">Target Endpoint URL</label>
-              <input
-                type="text"
-                className="input-text input-mono"
-                value={targetUrl}
-                readOnly
-                style={{ opacity: 0.85, background: "rgba(0,0,0,0.3)" }}
-              />
+              <div className="form-group">
+                <label className="form-label">Target Endpoint URL</label>
+                <input
+                  type="text"
+                  className="input-text input-mono"
+                  value={targetUrl}
+                  readOnly
+                  style={{ opacity: 0.85, background: "rgba(0,0,0,0.3)" }}
+                />
+              </div>
             </div>
-          </div>
+          ) : (
+            /* Interview Studio Card 1: Session Controls */
+            <div className="studio-card" style={{ borderColor: "rgba(139, 92, 246, 0.3)" }}>
+              <div className="card-header">
+                <h2 className="card-title">
+                  <MessageSquare size={18} color="#a78bfa" /> Interview Session Controls
+                </h2>
+                <span className="app-badge" style={{ background: "rgba(139,92,246,0.15)", borderColor: "rgba(139,92,246,0.3)", color: "#c084fc" }}>
+                  Step 1 &amp; 3
+                </span>
+              </div>
+
+              <div className="form-group">
+                <label className="form-label">
+                  Module ID
+                  <span className="form-label-note">Required for Start Interview API</span>
+                </label>
+                <input
+                  type="text"
+                  className="input-text input-mono"
+                  value={moduleId}
+                  onChange={(e) => setModuleId(e.target.value)}
+                  placeholder="e.g. f147f619-a3cc-4c10-b134-3d78ebd2a7ca"
+                />
+              </div>
+
+              <div className="form-group">
+                <label className="form-label">
+                  Active Interview ID
+                  <span className="form-label-note">Auto-captured or manual</span>
+                </label>
+                <input
+                  type="text"
+                  className="input-text input-mono"
+                  value={interviewId}
+                  onChange={(e) => setInterviewId(e.target.value)}
+                  placeholder="e.g. bb7a6e59-7c1d-40af-b803-8ef1e9c50b6e"
+                />
+              </div>
+
+              {/* Start Interview Action Button */}
+              <div style={{ display: "flex", gap: "0.75rem", flexWrap: "wrap", marginTop: "0.5rem" }}>
+                <button
+                  className="btn btn-purple"
+                  style={{ flex: 1, padding: "0.75rem" }}
+                  onClick={() => handleExecuteRequest("start")}
+                  disabled={loading}
+                >
+                  {loading && interviewAction === "start" ? (
+                    <RefreshCw size={16} className="spin" />
+                  ) : (
+                    <Play size={16} />
+                  )}
+                  Start Interview
+                </button>
+
+                <button
+                  className="btn btn-rose"
+                  style={{ padding: "0.75rem 1.25rem" }}
+                  onClick={() => handleExecuteRequest("complete")}
+                  disabled={loading || !interviewId}
+                  title="Submit entire interview test"
+                >
+                  {loading && interviewAction === "complete" ? (
+                    <RefreshCw size={16} className="spin" />
+                  ) : (
+                    <CheckCircle2 size={16} />
+                  )}
+                  Complete Test
+                </button>
+              </div>
+            </div>
+          )}
 
           {/* Card 2: Secondary cURL Token Extractor */}
           <div className="studio-card" style={{ borderColor: "rgba(6, 182, 212, 0.3)" }}>
             <div className="card-header">
               <h2 className="card-title">
-                <Sparkles size={18} color="#06b6d4" /> Secondary cURL Header Extractor
+                <Sparkles size={18} color="#06b6d4" /> Secondary cURL Extractor
               </h2>
               <span className="app-badge" style={{ background: "rgba(6,182,212,0.15)", borderColor: "rgba(6,182,212,0.3)", color: "#67e8f9" }}>
                 Auto-Parse
@@ -522,7 +889,7 @@ export default function Home() {
             </div>
 
             <p style={{ fontSize: "0.8rem", color: "var(--text-muted)" }}>
-              Paste ANY new cURL request below. Click <strong>&quot;Extract &amp; Inject Tokens&quot;</strong> to automatically parse its <code>authorization</code> Bearer token and <code>Cookie</code> string into your request!
+              Paste ANY cURL request (Probe or Interview). Click <strong>&quot;Extract &amp; Inject Tokens&quot;</strong> to parse Authorization, Cookie, Submission/Interview IDs!
             </p>
 
             <textarea
@@ -575,7 +942,6 @@ export default function Home() {
                 <Key size={18} color="#f59e0b" /> Active Authentication Headers
               </h2>
             </div>
-            {/* rest remains same */}
 
             <div className="form-group">
               <label className="form-label">
@@ -604,287 +970,389 @@ export default function Home() {
 
         </div>
 
-        {/* Right Column: Payload Customizer (Question ID, Answer, Keystrokes, Automation) */}
+        {/* Right Column: Dynamic Payload Customizer based on Active Mode */}
         <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}>
           
-          <div className="studio-card">
-            <div className="card-header" style={{ justifyContent: "space-between", flexWrap: "wrap", gap: "0.5rem" }}>
-              <h2 className="card-title">
-                <FileText size={18} color="#10b981" /> Question &amp; Answer Payload
-              </h2>
-              <div style={{ display: "flex", gap: "0.25rem", background: "rgba(0,0,0,0.3)", padding: "0.2rem", borderRadius: "8px", border: "1px solid rgba(255,255,255,0.08)" }}>
-                <button
-                  className={`btn btn-sm ${answerView === "batch" ? "btn-primary" : "btn-secondary"}`}
-                  style={{ padding: "0.25rem 0.6rem", fontSize: "0.75rem" }}
-                  onClick={() => setAnswerView("batch")}
-                >
-                  Batch Entry (Q1, Q2, Q3)
-                </button>
-                <button
-                  className={`btn btn-sm ${answerView === "active" ? "btn-primary" : "btn-secondary"}`}
-                  style={{ padding: "0.25rem 0.6rem", fontSize: "0.75rem" }}
-                  onClick={() => setAnswerView("active")}
-                >
-                  Active Focus
-                </button>
-              </div>
-            </div>
-
-            {/* Quick Switcher Buttons */}
-            <div className="form-group" style={{ marginBottom: "1.25rem" }}>
-              <label className="form-label" style={{ marginBottom: "0.5rem" }}>
-                <span>Select Active Question ID for Submission:</span>
-                <span className="form-label-note">Currently selected: <strong>{questionId}</strong></span>
-              </label>
-              <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
-                {["q1", "q2", "q3"].map((qKey) => {
-                  const isSelected = questionId === qKey;
-                  const hasContent = !!answersMap[qKey]?.trim();
-                  return (
-                    <button
-                      key={qKey}
-                      className={`btn btn-sm ${isSelected ? "btn-accent" : "btn-secondary"}`}
-                      onClick={() => handleQuestionChange(qKey)}
-                      style={{
-                        padding: "0.4rem 0.8rem",
-                        borderRadius: "8px",
-                        fontSize: "0.825rem",
-                        border: isSelected ? "1px solid var(--accent-cyan)" : "1px solid rgba(255,255,255,0.1)",
-                      }}
-                    >
-                      {qKey.toUpperCase()}
-                      <span
-                        style={{
-                          fontSize: "0.65rem",
-                          marginLeft: "6px",
-                          padding: "2px 5px",
-                          borderRadius: "4px",
-                          background: isSelected
-                            ? "rgba(255,255,255,0.25)"
-                            : hasContent
-                            ? "rgba(16,185,129,0.2)"
-                            : "rgba(255,255,255,0.06)",
-                          color: isSelected
-                            ? "#fff"
-                            : hasContent
-                            ? "#6ee7b7"
-                            : "var(--text-muted)",
-                        }}
-                      >
-                        {hasContent ? `${answersMap[qKey].length}c` : "empty"}
-                      </span>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* Batch All Answers Input View */}
-            {answerView === "batch" ? (
-              <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
-                {/* Q1 Box */}
-                <div style={{
-                  background: questionId === "q1" ? "rgba(99, 102, 241, 0.1)" : "rgba(0,0,0,0.2)",
-                  border: questionId === "q1" ? "1px solid var(--accent-indigo)" : "1px solid rgba(255,255,255,0.06)",
-                  borderRadius: "10px",
-                  padding: "0.85rem"
-                }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "0.4rem", alignItems: "center" }}>
-                    <span style={{ fontWeight: 600, fontSize: "0.85rem", color: questionId === "q1" ? "#a5b4fc" : "var(--text-main)" }}>
-                      Q1 Answer Content
-                    </span>
-                    {questionId === "q1" && (
-                      <span className="app-badge" style={{ background: "rgba(99, 102, 241, 0.2)", color: "#a5b4fc", borderColor: "rgba(99, 102, 241, 0.4)" }}>
-                        ACTIVE TARGET
-                      </span>
-                    )}
-                  </div>
-                  <textarea
-                    className="input-textarea input-mono"
-                    rows={4}
-                    value={answersMap["q1"] || ""}
-                    onChange={(e) => handleSpecificAnswerChange("q1", e.target.value)}
-                    placeholder="Paste Q1 answer text here..."
-                  />
-                </div>
-
-                {/* Q2 Box */}
-                <div style={{
-                  background: questionId === "q2" ? "rgba(99, 102, 241, 0.1)" : "rgba(0,0,0,0.2)",
-                  border: questionId === "q2" ? "1px solid var(--accent-indigo)" : "1px solid rgba(255,255,255,0.06)",
-                  borderRadius: "10px",
-                  padding: "0.85rem"
-                }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "0.4rem", alignItems: "center" }}>
-                    <span style={{ fontWeight: 600, fontSize: "0.85rem", color: questionId === "q2" ? "#a5b4fc" : "var(--text-main)" }}>
-                      Q2 Answer Content
-                    </span>
-                    {questionId === "q2" && (
-                      <span className="app-badge" style={{ background: "rgba(99, 102, 241, 0.2)", color: "#a5b4fc", borderColor: "rgba(99, 102, 241, 0.4)" }}>
-                        ACTIVE TARGET
-                      </span>
-                    )}
-                  </div>
-                  <textarea
-                    className="input-textarea input-mono"
-                    rows={4}
-                    value={answersMap["q2"] || ""}
-                    onChange={(e) => handleSpecificAnswerChange("q2", e.target.value)}
-                    placeholder="Paste Q2 answer text here..."
-                  />
-                </div>
-
-                {/* Q3 Box */}
-                <div style={{
-                  background: questionId === "q3" ? "rgba(99, 102, 241, 0.1)" : "rgba(0,0,0,0.2)",
-                  border: questionId === "q3" ? "1px solid var(--accent-indigo)" : "1px solid rgba(255,255,255,0.06)",
-                  borderRadius: "10px",
-                  padding: "0.85rem"
-                }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "0.4rem", alignItems: "center" }}>
-                    <span style={{ fontWeight: 600, fontSize: "0.85rem", color: questionId === "q3" ? "#a5b4fc" : "var(--text-main)" }}>
-                      Q3 Answer Content
-                    </span>
-                    {questionId === "q3" && (
-                      <span className="app-badge" style={{ background: "rgba(99, 102, 241, 0.2)", color: "#a5b4fc", borderColor: "rgba(99, 102, 241, 0.4)" }}>
-                        ACTIVE TARGET
-                      </span>
-                    )}
-                  </div>
-                  <textarea
-                    className="input-textarea input-mono"
-                    rows={4}
-                    value={answersMap["q3"] || ""}
-                    onChange={(e) => handleSpecificAnswerChange("q3", e.target.value)}
-                    placeholder="Paste Q3 answer text here..."
-                  />
-                </div>
-              </div>
-            ) : (
-              /* Active Single Answer Focus View */
-              <div className="form-group">
-                <div className="form-label">
-                  <span>Answer Text Content ({questionId})</span>
-                  <span style={{ fontSize: "0.75rem", color: "var(--accent-cyan)", fontFamily: "var(--font-mono)" }}>
-                    Length: {answer.length} chars
+          {studioMode === "interview" ? (
+            /* AI INTERVIEW MODE CARDS */
+            <>
+              {/* Interview Card: Current Question & Answer Input */}
+              <div className="studio-card" style={{ borderColor: "rgba(16, 185, 129, 0.3)" }}>
+                <div className="card-header">
+                  <h2 className="card-title">
+                    <HelpCircle size={18} color="#10b981" /> Active Interview Question &amp; Answer
+                  </h2>
+                  <span className="app-badge" style={{ background: "rgba(16,185,129,0.15)", borderColor: "rgba(16,185,129,0.3)", color: "#6ee7b7" }}>
+                    Step 2: Message API
                   </span>
                 </div>
-                <textarea
-                  className="input-textarea input-mono"
-                  rows={8}
-                  value={answer}
-                  onChange={(e) => handleAnswerChange(e.target.value)}
-                  placeholder={`Enter ${questionId} answer text here...`}
-                />
-              </div>
-            )}
 
-            {/* Quick Answer Actions */}
-            <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap", marginTop: "1rem" }}>
-              <button
-                className="btn btn-secondary btn-sm"
-                onClick={() => handleAnswerChange("")}
-              >
-                Clear Active Answer
-              </button>
-              <button
-                className="btn btn-secondary btn-sm"
-                onClick={() => autoCalculateKeystrokes(answer)}
-              >
-                <RefreshCw size={12} /> Sync Keystroke Length ({answer.length})
-              </button>
+                {/* Display Current Question Received */}
+                <div style={{
+                  background: "rgba(15, 23, 42, 0.7)",
+                  border: "1px solid rgba(16, 185, 129, 0.25)",
+                  borderRadius: "12px",
+                  padding: "1rem",
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "0.5rem"
+                }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <span style={{ fontSize: "0.75rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em", color: "#6ee7b7" }}>
+                      Interviewer Prompt / Question:
+                    </span>
+                    <span style={{ fontSize: "0.725rem", color: "var(--text-muted)" }}>
+                      {currentQuestion ? `${currentQuestion.length} chars` : "Awaiting start"}
+                    </span>
+                  </div>
+
+                  <p style={{
+                    fontSize: "0.925rem",
+                    color: currentQuestion ? "#ffffff" : "var(--text-muted)",
+                    lineHeight: 1.6,
+                    fontStyle: currentQuestion ? "normal" : "italic"
+                  }}>
+                    {currentQuestion || "Click 'Start Interview' above to generate the first question from the server."}
+                  </p>
+                </div>
+
+                {/* Answer Field for Candidate */}
+                <div className="form-group">
+                  <div className="form-label">
+                    <span>Write Your Response / Answer:</span>
+                    <span className="form-label-note" style={{ color: "var(--accent-cyan)", fontFamily: "var(--font-mono)" }}>
+                      Length: {interviewAnswer.length} chars
+                    </span>
+                  </div>
+
+                  <textarea
+                    className="input-textarea input-mono"
+                    rows={6}
+                    placeholder="Type your detailed interview response here..."
+                    value={interviewAnswer}
+                    onChange={(e) => handleInterviewAnswerChange(e.target.value)}
+                  />
+                </div>
+
+                {/* Submit & Complete Buttons */}
+                <div style={{ display: "flex", gap: "0.75rem", flexWrap: "wrap" }}>
+                  <button
+                    className="btn btn-emerald"
+                    style={{ flex: 2, padding: "0.75rem" }}
+                    onClick={() => handleExecuteRequest("message")}
+                    disabled={loading || !interviewAnswer.trim()}
+                  >
+                    {loading && interviewAction === "message" ? (
+                      <RefreshCw size={16} className="spin" />
+                    ) : (
+                      <Send size={16} />
+                    )}
+                    Submit Answer &amp; Get Next Question
+                  </button>
+
+                  <button
+                    className="btn btn-rose"
+                    style={{ flex: 1, padding: "0.75rem" }}
+                    onClick={() => handleExecuteRequest("complete")}
+                    disabled={loading}
+                  >
+                    {loading && interviewAction === "complete" ? (
+                      <RefreshCw size={16} className="spin" />
+                    ) : (
+                      <CheckCircle2 size={16} />
+                    )}
+                    Complete Test
+                  </button>
+                </div>
+              </div>
+
+              {/* Interview Conversation Timeline Card */}
+              {interviewHistory.length > 0 && (
+                <div className="studio-card">
+                  <div className="card-header">
+                    <h2 className="card-title">
+                      <ListOrdered size={18} color="#818cf8" /> Conversation Timeline ({interviewHistory.length} messages)
+                    </h2>
+                  </div>
+
+                  <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem", maxHeight: "300px", overflowY: "auto", paddingRight: "0.25rem" }}>
+                    {interviewHistory.map((item, idx) => (
+                      <div
+                        key={idx}
+                        style={{
+                          background: item.role === "interviewer" ? "rgba(99, 102, 241, 0.1)" : "rgba(16, 185, 129, 0.1)",
+                          border: item.role === "interviewer" ? "1px solid rgba(99, 102, 241, 0.25)" : "1px solid rgba(16, 185, 129, 0.25)",
+                          borderRadius: "10px",
+                          padding: "0.75rem 1rem",
+                          display: "flex",
+                          flexDirection: "column",
+                          gap: "0.35rem"
+                        }}
+                      >
+                        <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.75rem", color: item.role === "interviewer" ? "#a5b4fc" : "#6ee7b7", fontWeight: 700 }}>
+                          <span>{item.role === "interviewer" ? "🤖 AI Interviewer" : "👤 Candidate Answer"}</span>
+                          <span style={{ opacity: 0.7 }}>{item.timestamp}</span>
+                        </div>
+                        <p style={{ fontSize: "0.85rem", color: "var(--text-main)", whiteSpace: "pre-wrap", lineHeight: 1.5 }}>
+                          {item.text}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </>
+          ) : (
+            /* PROBE SUBMISSIONS MODE CARD */
+            <div className="studio-card">
+              <div className="card-header" style={{ justifyContent: "space-between", flexWrap: "wrap", gap: "0.5rem" }}>
+                <h2 className="card-title">
+                  <FileText size={18} color="#10b981" /> Question &amp; Answer Payload
+                </h2>
+                <div style={{ display: "flex", gap: "0.25rem", background: "rgba(0,0,0,0.3)", padding: "0.2rem", borderRadius: "8px", border: "1px solid rgba(255,255,255,0.08)" }}>
+                  <button
+                    className={`btn btn-sm ${answerView === "batch" ? "btn-primary" : "btn-secondary"}`}
+                    style={{ padding: "0.25rem 0.6rem", fontSize: "0.75rem" }}
+                    onClick={() => setAnswerView("batch")}
+                  >
+                    Batch Entry (Q1, Q2, Q3)
+                  </button>
+                  <button
+                    className={`btn btn-sm ${answerView === "active" ? "btn-primary" : "btn-secondary"}`}
+                    style={{ padding: "0.25rem 0.6rem", fontSize: "0.75rem" }}
+                    onClick={() => setAnswerView("active")}
+                  >
+                    Active Focus
+                  </button>
+                </div>
+              </div>
+
+              {/* Quick Switcher Buttons */}
+              <div className="form-group" style={{ marginBottom: "1.25rem" }}>
+                <label className="form-label" style={{ marginBottom: "0.5rem" }}>
+                  <span>Select Active Question ID for Submission:</span>
+                  <span className="form-label-note">Currently selected: <strong>{questionId}</strong></span>
+                </label>
+                <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
+                  {["q1", "q2", "q3"].map((qKey) => {
+                    const isSelected = questionId === qKey;
+                    const hasContent = !!answersMap[qKey]?.trim();
+                    return (
+                      <button
+                        key={qKey}
+                        className={`btn btn-sm ${isSelected ? "btn-accent" : "btn-secondary"}`}
+                        onClick={() => handleQuestionChange(qKey)}
+                        style={{
+                          padding: "0.4rem 0.8rem",
+                          borderRadius: "8px",
+                          fontSize: "0.825rem",
+                          border: isSelected ? "1px solid var(--accent-cyan)" : "1px solid rgba(255,255,255,0.1)",
+                        }}
+                      >
+                        {qKey.toUpperCase()}
+                        <span
+                          style={{
+                            fontSize: "0.65rem",
+                            marginLeft: "6px",
+                            padding: "2px 5px",
+                            borderRadius: "4px",
+                            background: isSelected
+                              ? "rgba(255,255,255,0.25)"
+                              : hasContent
+                              ? "rgba(16,185,129,0.2)"
+                              : "rgba(255,255,255,0.06)",
+                            color: isSelected
+                              ? "#fff"
+                              : hasContent
+                              ? "#6ee7b7"
+                              : "var(--text-muted)",
+                          }}
+                        >
+                          {hasContent ? `${answersMap[qKey].length}c` : "empty"}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {answerView === "batch" ? (
+                <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+                  {/* Q1 Box */}
+                  <div style={{
+                    background: questionId === "q1" ? "rgba(99, 102, 241, 0.1)" : "rgba(0,0,0,0.2)",
+                    border: questionId === "q1" ? "1px solid var(--accent-indigo)" : "1px solid rgba(255,255,255,0.06)",
+                    borderRadius: "10px",
+                    padding: "0.85rem"
+                  }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "0.4rem", alignItems: "center" }}>
+                      <span style={{ fontWeight: 600, fontSize: "0.85rem", color: questionId === "q1" ? "#a5b4fc" : "var(--text-main)" }}>
+                        Q1 Answer Content
+                      </span>
+                      {questionId === "q1" && (
+                        <span className="app-badge" style={{ background: "rgba(99, 102, 241, 0.2)", color: "#a5b4fc", borderColor: "rgba(99, 102, 241, 0.4)" }}>
+                          ACTIVE TARGET
+                        </span>
+                      )}
+                    </div>
+                    <textarea
+                      className="input-textarea input-mono"
+                      rows={4}
+                      value={answersMap["q1"] || ""}
+                      onChange={(e) => handleSpecificAnswerChange("q1", e.target.value)}
+                      placeholder="Paste Q1 answer text here..."
+                    />
+                  </div>
+
+                  {/* Q2 Box */}
+                  <div style={{
+                    background: questionId === "q2" ? "rgba(99, 102, 241, 0.1)" : "rgba(0,0,0,0.2)",
+                    border: questionId === "q2" ? "1px solid var(--accent-indigo)" : "1px solid rgba(255,255,255,0.06)",
+                    borderRadius: "10px",
+                    padding: "0.85rem"
+                  }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "0.4rem", alignItems: "center" }}>
+                      <span style={{ fontWeight: 600, fontSize: "0.85rem", color: questionId === "q2" ? "#a5b4fc" : "var(--text-main)" }}>
+                        Q2 Answer Content
+                      </span>
+                      {questionId === "q2" && (
+                        <span className="app-badge" style={{ background: "rgba(99, 102, 241, 0.2)", color: "#a5b4fc", borderColor: "rgba(99, 102, 241, 0.4)" }}>
+                          ACTIVE TARGET
+                        </span>
+                      )}
+                    </div>
+                    <textarea
+                      className="input-textarea input-mono"
+                      rows={4}
+                      value={answersMap["q2"] || ""}
+                      onChange={(e) => handleSpecificAnswerChange("q2", e.target.value)}
+                      placeholder="Paste Q2 answer text here..."
+                    />
+                  </div>
+
+                  {/* Q3 Box */}
+                  <div style={{
+                    background: questionId === "q3" ? "rgba(99, 102, 241, 0.1)" : "rgba(0,0,0,0.2)",
+                    border: questionId === "q3" ? "1px solid var(--accent-indigo)" : "1px solid rgba(255,255,255,0.06)",
+                    borderRadius: "10px",
+                    padding: "0.85rem"
+                  }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "0.4rem", alignItems: "center" }}>
+                      <span style={{ fontWeight: 600, fontSize: "0.85rem", color: questionId === "q3" ? "#a5b4fc" : "var(--text-main)" }}>
+                        Q3 Answer Content
+                      </span>
+                      {questionId === "q3" && (
+                        <span className="app-badge" style={{ background: "rgba(99, 102, 241, 0.2)", color: "#a5b4fc", borderColor: "rgba(99, 102, 241, 0.4)" }}>
+                          ACTIVE TARGET
+                        </span>
+                      )}
+                    </div>
+                    <textarea
+                      className="input-textarea input-mono"
+                      rows={4}
+                      value={answersMap["q3"] || ""}
+                      onChange={(e) => handleSpecificAnswerChange("q3", e.target.value)}
+                      placeholder="Paste Q3 answer text here..."
+                    />
+                  </div>
+                </div>
+              ) : (
+                <div className="form-group">
+                  <div className="form-label">
+                    <span>Answer Text Content ({questionId})</span>
+                    <span style={{ fontSize: "0.75rem", color: "var(--accent-cyan)", fontFamily: "var(--font-mono)" }}>
+                      Length: {probeAnswer.length} chars
+                    </span>
+                  </div>
+                  <textarea
+                    className="input-textarea input-mono"
+                    rows={8}
+                    value={probeAnswer}
+                    onChange={(e) => handleProbeAnswerChange(e.target.value)}
+                    placeholder={`Enter ${questionId} answer text here...`}
+                  />
+                </div>
+              )}
+
+              <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap", marginTop: "1rem" }}>
+                <button
+                  className="btn btn-secondary btn-sm"
+                  onClick={() => handleProbeAnswerChange("")}
+                >
+                  Clear Active Answer
+                </button>
+                <button
+                  className="btn btn-secondary btn-sm"
+                  onClick={() => autoCalculateKeystrokes(probeAnswer)}
+                >
+                  <RefreshCw size={12} /> Sync Keystroke Length ({probeAnswer.length})
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Shared Card: Keystrokes & Anti-Detection Parameters */}
+          <div className="studio-card">
+            <div className="form-label" style={{ marginBottom: "0.5rem" }}>
+              <span style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}>
+                <Sliders size={14} color="#a5b4fc" /> Keystroke &amp; Metadata Parameters
+              </span>
+              <span className="form-label-note">Editable metrics</span>
             </div>
 
-            {/* Keystroke Fields Config */}
-            <div style={{ marginTop: "0.75rem" }}>
-              <div className="form-label" style={{ marginBottom: "0.5rem" }}>
-                <span style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}>
-                  <Sliders size={14} color="#a5b4fc" /> Keystroke Metrics Parameters
-                </span>
-                <span className="form-label-note">Editable input fields</span>
+            <div className="keystroke-grid">
+              <div className="keystroke-item">
+                <label>keystrokeCount</label>
+                <input
+                  type="number"
+                  value={keystroke.keystrokeCount}
+                  onChange={(e) => setKeystroke({ ...keystroke, keystrokeCount: Number(e.target.value) })}
+                />
               </div>
 
-              <div className="keystroke-grid">
-                <div className="keystroke-item">
-                  <label>keystrokeCount</label>
-                  <input
-                    type="number"
-                    value={keystroke.keystrokeCount}
-                    onChange={(e) => setKeystroke({ ...keystroke, keystrokeCount: Number(e.target.value) })}
-                  />
-                </div>
+              <div className="keystroke-item">
+                <label>backspaceCount</label>
+                <input
+                  type="number"
+                  value={keystroke.backspaceCount}
+                  onChange={(e) => setKeystroke({ ...keystroke, backspaceCount: Number(e.target.value) })}
+                />
+              </div>
 
-                <div className="keystroke-item">
-                  <label>backspaceCount</label>
-                  <input
-                    type="number"
-                    value={keystroke.backspaceCount}
-                    onChange={(e) => setKeystroke({ ...keystroke, backspaceCount: Number(e.target.value) })}
-                  />
-                </div>
+              <div className="keystroke-item">
+                <label>finalLength</label>
+                <input
+                  type="number"
+                  value={keystroke.finalLength}
+                  onChange={(e) => setKeystroke({ ...keystroke, finalLength: Number(e.target.value) })}
+                />
+              </div>
 
-                <div className="keystroke-item">
-                  <label>finalLength</label>
-                  <input
-                    type="number"
-                    value={keystroke.finalLength}
-                    onChange={(e) => setKeystroke({ ...keystroke, finalLength: Number(e.target.value) })}
-                  />
-                </div>
+              <div className="keystroke-item">
+                <label>focusLossCount</label>
+                <input
+                  type="number"
+                  value={interviewMetadata.focusLossCount}
+                  onChange={(e) => setInterviewMetadata({ ...interviewMetadata, focusLossCount: Number(e.target.value) })}
+                />
+              </div>
 
-                <div className="keystroke-item">
-                  <label>avgIntervalMs</label>
-                  <input
-                    type="number"
-                    value={keystroke.avgIntervalMs}
-                    onChange={(e) => setKeystroke({ ...keystroke, avgIntervalMs: Number(e.target.value) })}
-                  />
-                </div>
+              <div className="keystroke-item">
+                <label>timeOnTaskMs</label>
+                <input
+                  type="number"
+                  value={interviewMetadata.timeOnTaskMs}
+                  onChange={(e) => setInterviewMetadata({ ...interviewMetadata, timeOnTaskMs: Number(e.target.value) })}
+                />
+              </div>
 
-                <div className="keystroke-item">
-                  <label>intervalStdDevMs</label>
-                  <input
-                    type="number"
-                    value={keystroke.intervalStdDevMs}
-                    onChange={(e) => setKeystroke({ ...keystroke, intervalStdDevMs: Number(e.target.value) })}
-                  />
-                </div>
-
-                <div className="keystroke-item">
-                  <label>unmatchedInsertions</label>
-                  <input
-                    type="number"
-                    value={keystroke.unmatchedInsertionChars}
-                    onChange={(e) => setKeystroke({ ...keystroke, unmatchedInsertionChars: Number(e.target.value) })}
-                  />
-                </div>
-
-                <div className="keystroke-item">
-                  <label>compositionChars</label>
-                  <input
-                    type="number"
-                    value={keystroke.compositionCharsTotal}
-                    onChange={(e) => setKeystroke({ ...keystroke, compositionCharsTotal: Number(e.target.value) })}
-                  />
-                </div>
-
-                <div className="keystroke-item">
-                  <label>compositionEvents</label>
-                  <input
-                    type="number"
-                    value={keystroke.compositionEventCount}
-                    onChange={(e) => setKeystroke({ ...keystroke, compositionEventCount: Number(e.target.value) })}
-                  />
-                </div>
-
-                <div className="keystroke-item">
-                  <label>compositionDuration</label>
-                  <input
-                    type="number"
-                    value={keystroke.compositionDurationMs}
-                    onChange={(e) => setKeystroke({ ...keystroke, compositionDurationMs: Number(e.target.value) })}
-                  />
-                </div>
+              <div className="keystroke-item">
+                <label>pasteEvents</label>
+                <input
+                  type="number"
+                  value={interviewMetadata.pasteEvents}
+                  onChange={(e) => setInterviewMetadata({ ...interviewMetadata, pasteEvents: Number(e.target.value) })}
+                />
               </div>
             </div>
 
@@ -950,12 +1418,12 @@ export default function Home() {
         {activeTab === "curl" && (
           <div className="code-container">
             <div className="code-header">
-              <span>Executable bash command with updated submission ID &amp; injected tokens</span>
+              <span>Executable bash command with updated endpoints &amp; injected tokens</span>
               <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
                 <button className="btn btn-accent btn-sm" onClick={handleGenerateNewCurl}>
                   <Sparkles size={14} /> Refresh cURL
                 </button>
-                <button className="btn btn-primary btn-sm" onClick={handleExecuteRequest} disabled={loading}>
+                <button className="btn btn-primary btn-sm" onClick={() => handleExecuteRequest()} disabled={loading}>
                   {loading ? <RefreshCw size={14} className="spin" /> : <Play size={14} />}
                   Run This cURL
                 </button>
@@ -992,7 +1460,7 @@ export default function Home() {
           <div className="code-container">
             <div className="code-header" style={{ justifyContent: "space-between", flexWrap: "wrap", gap: "0.5rem" }}>
               <div style={{ display: "flex", gap: "0.75rem", alignItems: "center", flexWrap: "wrap" }}>
-                <span style={{ fontWeight: 600, fontSize: "0.95rem" }}>⚡ Submission API Response</span>
+                <span style={{ fontWeight: 600, fontSize: "0.95rem" }}>⚡ API Response</span>
                 {apiResponse && (
                   <span
                     className="app-badge"
@@ -1074,9 +1542,9 @@ export default function Home() {
             ) : (
               <div style={{ padding: "3rem", textAlign: "center", color: "var(--text-muted)" }}>
                 <Zap size={32} style={{ color: "rgba(255,255,255,0.2)", marginBottom: "0.75rem" }} />
-                <p style={{ fontSize: "0.9rem" }}>No submission response received yet.</p>
+                <p style={{ fontSize: "0.9rem" }}>No response received yet.</p>
                 <p style={{ fontSize: "0.8rem", color: "var(--text-muted)", marginTop: "0.25rem" }}>
-                  Click <strong>&quot;Execute API Request&quot;</strong> or <strong>&quot;Run This cURL&quot;</strong> above to trigger the submission.
+                  Click <strong>&quot;Execute API Request&quot;</strong>, <strong>&quot;Start Interview&quot;</strong>, or <strong>&quot;Submit Answer&quot;</strong> above to trigger request.
                 </p>
               </div>
             )}
