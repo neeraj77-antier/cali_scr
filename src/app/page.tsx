@@ -107,6 +107,10 @@ export default function Home() {
   const [activeTab, setActiveTab] = useState<"curl" | "response" | "jsonBody">("curl");
   const [generateMessage, setGenerateMessage] = useState<string | null>(null);
 
+  // Interview Turn Tracking
+  const [turnCount, setTurnCount] = useState(0);
+  const [maxTurns, setMaxTurns] = useState(12);
+
   useEffect(() => {
     setIsMounted(true);
     const savedAuth = localStorage.getItem("caliber_studio_auth");
@@ -393,12 +397,15 @@ export default function Home() {
     if (!data) return null;
     if (typeof data === "string") return data;
 
-    // Check common interview response formats
+    // Actual Caliber API field — highest priority
+    if (data.interviewerMsg) return data.interviewerMsg;
+
+    // Fallback common field names
     if (data.question) return data.question;
     if (data.content) return data.content;
     if (data.message) return data.message;
     if (data.nextQuestion) return data.nextQuestion;
-    
+
     if (Array.isArray(data.messages) && data.messages.length > 0) {
       const last = data.messages[data.messages.length - 1];
       if (typeof last === "string") return last;
@@ -418,11 +425,15 @@ export default function Home() {
     return null;
   };
 
-  // Helper to extract Interview ID from Start Interview response
+  // Helper to extract Interview / Session ID from Start Interview response
   const extractInterviewIdFromResponse = (data: any): string | null => {
     if (!data) return null;
     if (typeof data !== "object") return null;
 
+    // Actual Caliber API field — highest priority
+    if (data.sessionId && typeof data.sessionId === "string") return data.sessionId;
+
+    // Fallback common field names
     if (data.id && typeof data.id === "string") return data.id;
     if (data.interviewId && typeof data.interviewId === "string") return data.interviewId;
     if (data._id && typeof data._id === "string") return data._id;
@@ -507,22 +518,34 @@ export default function Home() {
 
       // Post-Processing for Interview Actions
       if (studioMode === "interview" && resData.ok) {
-        if (currentAct === "start") {
-          const newIntId = extractInterviewIdFromResponse(resData.data);
-          if (newIntId) {
-            setInterviewId(newIntId);
-          }
-          setInterviewStatus("active");
+        // Extract turn tracking from response (present in both start & message responses)
+        const responseData = resData.data || {};
+        if (typeof responseData.turnCount === "number") setTurnCount(responseData.turnCount);
+        if (typeof responseData.maxTurns === "number") setMaxTurns(responseData.maxTurns);
 
-          const questionText = extractQuestionFromResponse(resData.data) || "Interview started! Please write your response below.";
+        if (currentAct === "start") {
+          const newIntId = extractInterviewIdFromResponse(responseData);
+          if (newIntId) setInterviewId(newIntId);
+          setInterviewStatus("active");
+          setTurnCount(responseData.turnCount ?? 0);
+          setMaxTurns(responseData.maxTurns ?? 12);
+
+          const questionText = extractQuestionFromResponse(responseData) || "Interview started! Please write your response below.";
           setCurrentQuestion(questionText);
           setInterviewHistory([
             { role: "interviewer", text: questionText, timestamp: new Date().toLocaleTimeString() }
           ]);
-          setGenerateMessage(`Interview started successfully! Interview ID: ${newIntId || interviewId}`);
+          setGenerateMessage(`Interview started! Session ID: ${newIntId || interviewId} — ${responseData.maxTurns ?? 12} turns total`);
         } else if (currentAct === "message") {
-          const newQuestion = extractQuestionFromResponse(resData.data) || "Next question received!";
-          
+          const newTurn = responseData.turnCount ?? turnCount + 1;
+          setTurnCount(newTurn);
+
+          const isDone = responseData.done === true || newTurn >= (responseData.maxTurns ?? maxTurns);
+
+          const newQuestion = isDone
+            ? (extractQuestionFromResponse(responseData) || "Interview complete — all questions answered. Click 'Complete Test' to submit.")
+            : (extractQuestionFromResponse(responseData) || "Next question received!");
+
           setInterviewHistory((prev) => [
             ...prev,
             { role: "candidate", text: interviewAnswer, timestamp: new Date().toLocaleTimeString() },
@@ -531,12 +554,17 @@ export default function Home() {
 
           setCurrentQuestion(newQuestion);
           setInterviewAnswer("");
-          setGenerateMessage("Answer submitted successfully! Received next question.");
+
+          if (isDone) {
+            setGenerateMessage(`All ${responseData.maxTurns ?? maxTurns} turns done! Click 'Complete Test' to submit.`);
+          } else {
+            setGenerateMessage(`Turn ${newTurn}/${responseData.maxTurns ?? maxTurns} — Answer submitted! Next question ready.`);
+          }
         } else if (currentAct === "complete") {
           setInterviewStatus("completed");
           setGenerateMessage("Interview test completed and submitted successfully!");
         }
-        setTimeout(() => setGenerateMessage(null), 4000);
+        setTimeout(() => setGenerateMessage(null), 5000);
       }
     } catch (err: any) {
       setApiResponse({ error: err.message || "Network error occurred" });
@@ -1040,14 +1068,17 @@ export default function Home() {
                     className="btn btn-emerald"
                     style={{ flex: 2, padding: "0.75rem" }}
                     onClick={() => handleExecuteRequest("message")}
-                    disabled={loading || !interviewAnswer.trim()}
+                    disabled={loading || !interviewAnswer.trim() || turnCount >= maxTurns}
+                    title={turnCount >= maxTurns ? "All turns used — click Complete Test to submit" : ""}
                   >
                     {loading && interviewAction === "message" ? (
                       <RefreshCw size={16} className="spin" />
                     ) : (
                       <Send size={16} />
                     )}
-                    Submit Answer &amp; Get Next Question
+                    {turnCount >= maxTurns
+                      ? "All Turns Done"
+                      : `Submit Answer (Turn ${turnCount + 1}/${maxTurns})`}
                   </button>
 
                   <button
