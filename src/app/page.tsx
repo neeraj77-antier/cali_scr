@@ -42,8 +42,8 @@ export default function Home() {
   const [probeBaseUrl, setProbeBaseUrl] = useState("https://caliber.antiers.work/api/v1/submissions");
 
   // Main Config States - Interview Studio
-  const [moduleId, setModuleId] = useState("f147f619-a3cc-4c10-b134-3d78ebd2a7ca");
-  const [interviewId, setInterviewId] = useState("bb7a6e59-7c1d-40af-b803-8ef1e9c50b6e");
+  const [moduleId, setModuleId] = useState("");
+  const [interviewId, setInterviewId] = useState("");
   const [interviewStatus, setInterviewStatus] = useState<"not_started" | "active" | "completed">("not_started");
   const [interviewAction, setInterviewAction] = useState<"start" | "message" | "complete">("start");
   const [currentQuestion, setCurrentQuestion] = useState<string>("");
